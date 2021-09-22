@@ -31,56 +31,93 @@ enum opcode{ RRQ=1, WRQ=2, DATA=3, ACK=4, ERROR=5 };
 	----------------------------------------------------
    | Opcode=1/2 |  Filename  |   0  | Mode==octet |  0  |	RRQ/WRQ packet
 	---------------------------------------------------- 			    */
-typedef struct {
+struct rw_request{
 	int opcode;
 	char filename[MAX_DATA_SIZE];
-} rw_request;
+};
 
 
 /*  2 bytes     2 bytes      n bytes
 	----------------------------------
    | Opcode=3 |   Block #  |   Data   |	  DATA packet
 	----------------------------------		   	   */
-typedef struct {
+struct data_packet{
 	int opcode;
 	int blocknum;
     int data[MAX_DATA_SIZE];
-} data_packet;
+} ;
 
 /* 	  2 bytes     2 bytes
 	 ---------------------
 	| Opcode=4 |  Block # |		ACK packet
 	 ---------------------				*/
-typedef struct {
+struct ack_packet{
 	int opcode;
 	int blocknum;
-} ack_packet;
+} ;
 
 /* 2 bytes     2 bytes      string    1 byte
   -------------------------------------------
  | Opcode=5 |  ErrorCode |   ErrMsg   |   0  |		ERROR packet
   -------------------------------------------   			  */
-typedef struct {
+struct error_packet{
 	int opcode;
 	int errorcode;
 	char errorstring[MAX_DATA_SIZE];
-} error_packet;
+} ;
 
 // send ACK packet
-void SendAck()
+void SendAck(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
+			socklen_t socklen)
 {
-
+	struct ack_packet ack;
+	ack.opcode = ACK;
+	ack.blocknum = blocknum;
+	
+	ssize_t sent = sendto(sockfd, &ack, sizeof(ack),0,
+				(struct sockaddr_in *) sock_inf,socklen);
+				
+	if(sent<0){
+		perror("send to failed\n");
+	}
+	
 }
 
 // send DATA packet
-void SendData()
+void SendData(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
+			socklen_t socklen, char data_from_datapacket[MAX_DATA_SIZE])
 {
+
+	struct data_packet data;
+	data.opcode = DATA;
+	data.blocknum = blocknum;
+	memcpy(data.data_block, data_from_datapacket, MAX_DATA_SIZE);
+	
+	ssize_t sent = sendto(sockfd, &data, sizeof(data),0,
+				(struct sockaddr_in *) sock_inf,socklen);
+				
+	if(sent<0){
+		perror("send to failed\n");
+	}
 
 }
 
 // send ERROR packet
-void SendError()
+void SendError(int errorcode, int sockfd, struct sockaddr_in *sock_inf,
+			socklen_t socklen, char error_msg[MAX_DATA_SIZE])
 {
+
+	struct error_packet error;
+	error.opcode = ERROR;
+	error.errorcode = errorcode;
+	memcpy(error.errorstring, error_msg, MAX_DATA_SIZE);
+	
+	ssize_t sent = sendto(sockfd, &error, sizeof(error),0,
+				(struct sockaddr_in *) sock_inf,socklen);
+				
+	if(sent<0){
+		perror("send to failed\n");
+	}
 
 }
 
