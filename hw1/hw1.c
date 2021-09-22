@@ -122,9 +122,16 @@ void SendError(int errorcode, int sockfd, struct sockaddr_in *sock_inf,
 }
 
 // recieve read/write request
-void RecvReadWrite()
+void RecvReadWrite(short opcode, char *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
 {
+    if ( opcode == RRQ )
+    {
 
+    }
+    else if ( opcode == WRQ )
+    {
+
+    }
 }
 
 // signal handler
@@ -195,7 +202,7 @@ int main (int argc, char *argv[])
         // handle new read or write request, other packet types are handled in child fork
         if ( opcode == WRQ || opcode == RRQ )
         {
-            RecvReadWrite( &msg, len, &cliaddr, next_port );
+            RecvReadWrite( opcode, &msg, len, &cliaddr, next_port );
             next_port++;
         }
     }
