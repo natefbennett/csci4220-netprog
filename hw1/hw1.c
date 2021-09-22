@@ -31,7 +31,7 @@ enum opcode{ RRQ=1, WRQ=2, DATA=3, ACK=4, ERROR=5 };
 	----------------------------------------------------
    | Opcode=1/2 |  Filename  |   0  | Mode==octet |  0  |	RRQ/WRQ packet
 	---------------------------------------------------- 			    */
-struct {
+typedef struct {
 	int opcode;
 	char filename[MAX_DATA_SIZE];
 } rw_request;
@@ -41,16 +41,17 @@ struct {
 	----------------------------------
    | Opcode=3 |   Block #  |   Data   |	  DATA packet
 	----------------------------------		   	   */
-struct {
+typedef struct {
 	int opcode;
 	int blocknum;
+    int data[MAX_DATA_SIZE];
 } data_packet;
 
 /* 	  2 bytes     2 bytes
 	 ---------------------
 	| Opcode=4 |  Block # |		ACK packet
 	 ---------------------				*/
-struct {
+typedef struct {
 	int opcode;
 	int blocknum;
 } ack_packet;
@@ -59,7 +60,7 @@ struct {
   -------------------------------------------
  | Opcode=5 |  ErrorCode |   ErrMsg   |   0  |		ERROR packet
   -------------------------------------------   			  */
-struct {
+typedef struct {
 	int opcode;
 	int errorcode;
 	char errorstring[MAX_DATA_SIZE];
@@ -111,6 +112,7 @@ int main (int argc, char *argv[])
     // check if port range correct
     int start_port = atoi(argv[1]);
     int end_port = atoi(argv[2]);
+    int next_port = start_port++;    // set up port for forked process
 
     if ( start_port < MIN_PORT   || 
          end_port   < start_port || 
@@ -136,10 +138,29 @@ int main (int argc, char *argv[])
     // setup signal handler
     Signal(SIGCHLD, SigHandler);
 
+    int         n;    // response length
+    char        msg;  // data recieved from a client
+    socklen_t   len;
+
     // infinite loop for server
     for ( ; ; )
     {
-        
+        len = sizeof(cliaddr);
+        n = Recvfrom( sockfd, &msg, MAX_DATA_SIZE, 0, (SA *) &cliaddr, &len );
+
+        // handle incorrect message lengths??
+
+        // get opcode from message
+        short raw_opcode;
+        memcpy(&raw_opcode, msg, sizeof(raw_opcode));
+        short opcode = ntohs(raw_opcode);
+
+        // handle new read or write request, other packet types are handled in child fork
+        if ( opcode == WRQ || opcode == RRQ )
+        {
+            RecvReadWrite( &msg, len, &cliaddr, next_port );
+            next_port++;
+        }
     }
 
     
