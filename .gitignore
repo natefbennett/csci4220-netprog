@@ -51,5 +51,17 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+*.vscode/
+
+# Local History for Visual Studio Code
+.history/
+
 # Custom
 unpv13e/
