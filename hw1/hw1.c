@@ -155,9 +155,20 @@ void RecvReadWrite(short opcode, char *msg, socklen_t len, struct sockaddr_in *c
 
     if ( opcode == RRQ )
     {
+        // TODO: cast msg to read_request struct
+        
+
         if( fork() == 0 ) // child
         {
+            // TODO: open file
+
+            int last_dgram = 0;
+
             // loop while still getting datagrams
+            while(!last_dgram)
+            {
+
+            }
         }
     }
     else if ( opcode == WRQ )
