@@ -36,7 +36,6 @@ struct rw_request{
 	char filename[MAX_DATA_SIZE];
 };
 
-
 /*  2 bytes     2 bytes      n bytes
 	----------------------------------
    | Opcode=3 |   Block #  |   Data   |	  DATA packet
@@ -65,6 +64,19 @@ struct error_packet{
 	int errorcode;
 	char errorstring[MAX_DATA_SIZE];
 } ;
+
+// child termination signal handler
+void SigChildHandler()
+{
+    int stat;
+    waitpid(-1, &stat, WNOHANG);
+}
+
+// timeout alarm signal handler
+void SigAlarmHandler()
+{
+    return; // just interrupt the recvfrom()
+}
 
 // send ACK packet
 void SendAck(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
@@ -124,21 +136,37 @@ void SendError(int errorcode, int sockfd, struct sockaddr_in *sock_inf,
 // recieve read/write request
 void RecvReadWrite(short opcode, char *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
 {
+    // open new port and bind to socket
+	int					sockfd;
+	struct sockaddr_in	servaddr, cliaddr;
+    int                 n;    // recvfrom() response length
+
+	sockfd = Socket(AF_INET, SOCK_DGRAM, 0);
+
+	bzero(&servaddr, sizeof(servaddr));
+	servaddr.sin_family      = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port        = htons(next_port);
+
+	Bind(sockfd, (SA *) &servaddr, sizeof(servaddr));
+    
+    // register timeout alarm
+    Signal(SIGALRM, SigAlarmHandler);
+
     if ( opcode == RRQ )
     {
-
+        if( fork() == 0 ) // child
+        {
+            // loop while still getting datagrams
+        }
     }
     else if ( opcode == WRQ )
     {
-
+        if( fork() == 0 ) // child
+        {
+            // loop while still getting datagrams
+        }
     }
-}
-
-// signal handler
-void SigHandler()
-{
-    int stat;
-    waitpid(-1, &stat, WNOHANG);
 }
 
 int main (int argc, char *argv[])
@@ -180,9 +208,9 @@ int main (int argc, char *argv[])
 	Bind(sockfd, (SA *) &servaddr, sizeof(servaddr));
 
     // setup signal handler
-    Signal(SIGCHLD, SigHandler);
+    Signal(SIGCHLD, SigChildHandler);
 
-    int         n;    // response length
+    int         n;    // recvfrom() response length
     char        msg;  // data recieved from a client
     socklen_t   len;
 
