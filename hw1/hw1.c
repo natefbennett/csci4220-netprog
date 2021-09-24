@@ -278,7 +278,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 			
             fclose(fd);
             close(sockfd);
-            printf("Completed RRQ (file: %s)\n", file);
+            printf("Completed RRQ\n");
         }
     }
     else if ( opcode == WRQ )
@@ -371,7 +371,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 			
             fclose(fd);
             close(sockfd);
-            printf("Completed WRQ (file: %s)\n", file);
+            printf("Completed WRQ\n");
         }
     }
 }
