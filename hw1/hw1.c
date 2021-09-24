@@ -21,12 +21,15 @@
 #include <stdlib.h>
 #include "../../unpv13e/lib/unp.h"
 
-#define MAX_DATA_SIZE 512
-#define ABORT_TIMEOUT 10
-#define RETRANSMIT_TIMEOUT 1
+#define MAX_DATA_SIZE       512
+#define MAX_MSG_SIZE        516
+#define ABORT_TIMEOUT       10
+#define RETRANSMIT_TIMEOUT  1
 
 #define MAX_PORT 49151
 #define MIN_PORT 1024
+
+typedef unsigned char byte;
 
 /*
  1     Read request (RRQ)
@@ -173,19 +176,31 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
     if ( opcode == RRQ )
     {
         // TODO: cast msg to read_request struct
-        
+        struct rw_request r_req;
+        memcpy( &r_req, msg, sizeof(r_req) );
+        char *filename = r_req.filename;
 
         if( fork() == 0 ) // child
         {
-            // TODO: open file
+            // open file
+            FILE *fptr;
+
+            if ( (fptr = fopen(filename,"rb")) == NULL ){
+                fprintf(stderr, "File does not exist!");
+                exit(1);
+            }
 
             int last_dgram = 0;
 
             // loop while still getting datagrams
             while(!last_dgram)
             {
-
+                byte cur_block[MAX_DATA_SIZE];
+                fread(&cur_block, MAX_DATA_SIZE, 1, fptr);
+                last_dgram = 1; // terminate for now
+                // TODO: create data packet and send data to client
             }
+            fclose(fptr);
         }
     }
     else if ( opcode == WRQ )
