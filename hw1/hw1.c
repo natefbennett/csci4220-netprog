@@ -19,8 +19,8 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-// #include "../unpv13e/lib/unp.h"
-#include "unp.h" // for submitty
+#include "../unpv13e/lib/unp.h"
+// #include "unp.h" // for submitty
 
 #define MAX_DATA_SIZE       512
 #define ABORT_TIMEOUT       10
@@ -110,7 +110,7 @@ void SendAck(short blocknum, int sockfd, struct sockaddr_in *sock_inf,
 		perror("send to failed\n");
 		exit(1);
 	}
-	
+	printf("Sending ACK (blocknum: %d)\n", blocknum);
 }
 
 // send DATA packet
@@ -131,7 +131,7 @@ void SendData(short blocknum, int sockfd, struct sockaddr_in *sock_inf,
 		perror("send to failed\n");
 		exit(1);
 	}
-
+    printf("Sending DATA (blocknum: %d, len: %zu)\n", blocknum, chunk_len);
 }
 
 // send ERROR packet
@@ -151,7 +151,7 @@ void SendError(short errorcode, int sockfd, struct sockaddr_in *sock_inf,
 		perror("send to failed\n");
 		exit(1);
 	}
-
+    printf("Sending ERROR (error code: %d)\nError Message: %s\n", errorcode, error_msg);
 }
 
 // recieve read/write request
@@ -197,7 +197,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 				exit(1);
 			}
 
-            printf("requested file: %s\n",file);
+            printf("Handeling read request of file: %s\n",file);
         
 			// track block number and send acknowledgement
 			short blocknum = 1;
@@ -263,7 +263,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
                 if ( opcode == ACK )
                 {
                     // TODO: validate block number
-                    printf("ACK Received!\n");
+                    printf("Received ACK (blocknum: %d)\n", blocknum);
 
                     blocknum++;   
                 }
@@ -278,6 +278,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 			
             fclose(fd);
             close(sockfd);
+            printf("Completed RRQ (file: %s)\n", file);
         }
     }
     else if ( opcode == WRQ )
@@ -308,6 +309,9 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 				SendError(errno, sockfd, cliaddr, sizeof(*cliaddr), strerror(errno));
 				exit(1);
 			}
+
+            printf("Handeling write request of file: %s\n",file);
+
 			//send ack 0 packet
 			short blocknum = 0;
 			SendAck(blocknum, sockfd, cliaddr, len);
@@ -367,10 +371,9 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 			
             fclose(fd);
             close(sockfd);
+            printf("Completed WRQ (file: %s)\n", file);
         }
     }
-
-    printf("Done with data transfer\n");
 }
 
 
@@ -435,6 +438,7 @@ int main (int argc, char *argv[])
         // handle new read or write request, other packet types are handled in child fork
         if ( opcode == WRQ || opcode == RRQ )
         {
+            printf("Current TID: %d\n", next_port-1);
             RecvReadWrite( opcode, &msg, len, &cliaddr, next_port );
             next_port++;
         }
