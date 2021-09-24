@@ -356,7 +356,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 					thats_everything = true;
 				}
 				//write contents in file
-				msg->data_packet.data[511] = '\0';
+				msg->data_packet.data[512] = '\0';
 				int written = fwrite(msg->data_packet.data, 1,recv-4,fd );
 				if(written < 0)
 				{
