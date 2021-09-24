@@ -1,3 +1,4 @@
+     
 //
 //  main.c
 //  hw1
@@ -6,10 +7,19 @@
 //  Copyright Â© 2021 Anisha Halwai. All rights reserved.
 //
 
+#include <netdb.h>
+#include <unistd.h>
+#include <strings.h>
+#include <string.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include "../unpv13e/lib/unp.h"
+#include "../../unpv13e/lib/unp.h"
 
 #define MAX_DATA_SIZE       512
 #define MAX_MSG_SIZE        516
@@ -30,43 +40,47 @@ typedef unsigned char byte;
 */
 enum opcode{ RRQ=1, WRQ=2, DATA=3, ACK=4, ERROR=5 };
 
-/*	2 bytes     string      1 byte     string   1 byte
-	----------------------------------------------------
-   | Opcode=1/2 |  Filename  |   0  | Mode==octet |  0  |	RRQ/WRQ packet
-	---------------------------------------------------- 			    */
-struct rw_request{
-	int opcode;
-	char filename[MAX_DATA_SIZE];
-};
+typedef union{
 
-/*  2 bytes     2 bytes      n bytes
-	----------------------------------
-   | Opcode=3 |   Block #  |   Data   |	  DATA packet
-	----------------------------------		   	   */
-struct data_packet{
-	int opcode;
-	int blocknum;
-    byte datablock[MAX_DATA_SIZE];
-} ;
+	/*	2 bytes     string      1 byte     string   1 byte
+		----------------------------------------------------
+	   | Opcode=1/2 |  Filename  |   0  | Mode==octet |  0  |	RRQ/WRQ packet
+		---------------------------------------------------- 			    */
+	struct{
+		int opcode;
+		char filename[MAX_DATA_SIZE+2];
+	}rw_request;
 
-/* 	  2 bytes     2 bytes
-	 ---------------------
-	| Opcode=4 |  Block # |		ACK packet
-	 ---------------------				*/
-struct ack_packet{
-	int opcode;
-	int blocknum;
-} ;
+	/*  2 bytes     2 bytes      n bytes
+		----------------------------------
+	   | Opcode=3 |   Block #  |   Data   |	  DATA packet
+		----------------------------------		   	   */
+	struct {
+		int opcode;
+		int blocknum;
+		int data[MAX_DATA_SIZE];
+	} data_packet;
 
-/* 2 bytes     2 bytes      string    1 byte
-  -------------------------------------------
- | Opcode=5 |  ErrorCode |   ErrMsg   |   0  |		ERROR packet
-  -------------------------------------------   			  */
-struct error_packet{
-	int opcode;
-	int errorcode;
-	char errorstring[MAX_DATA_SIZE];
-} ;
+	/* 	  2 bytes     2 bytes
+		 ---------------------
+		| Opcode=4 |  Block # |		ACK packet
+		 ---------------------				*/
+	struct{
+		int opcode;
+		int blocknum;
+	} ack_packet;
+
+	/* 2 bytes     2 bytes      string    1 byte
+	  -------------------------------------------
+	 | Opcode=5 |  ErrorCode |   ErrMsg   |   0  |		ERROR packet
+	  -------------------------------------------   			  */
+	struct{
+		int opcode;
+		int errorcode;
+		char errorstring[MAX_DATA_SIZE];
+	}error_packet;
+	
+} packet;
 
 // child termination signal handler
 void SigChildHandler()
@@ -85,15 +99,16 @@ void SigAlarmHandler()
 void SendAck(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
 			socklen_t socklen)
 {
-	struct ack_packet ack;
-	ack.opcode = ACK;
-	ack.blocknum = blocknum;
+	packet pack;
+	pack.ack_packet.opcode = htons(ACK);
+	pack.ack_packet.blocknum = htons(blocknum);
 	
-	ssize_t sent = sendto(sockfd, &ack, sizeof(ack),0,
-				(struct sockaddr_in *) sock_inf,socklen);
+	ssize_t sent = sendto(sockfd, &pack, sizeof(pack),0,
+				(struct sockaddr *) sock_inf,socklen);
 				
 	if(sent<0){
 		perror("send to failed\n");
+		exit(1);
 	}
 	
 }
@@ -102,17 +117,18 @@ void SendAck(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
 void SendData(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
 			socklen_t socklen, char data_from_datapacket[MAX_DATA_SIZE])
 {
-
-	struct data_packet data;
-	data.opcode = DATA;
-	data.blocknum = blocknum;
-	memcpy(data.datablock, data_from_datapacket, MAX_DATA_SIZE);
 	
-	ssize_t sent = sendto(sockfd, &data, sizeof(data),0,
-				(struct sockaddr_in *) sock_inf,socklen);
+	packet pack;
+	pack.data_packet.opcode = htons(DATA);
+	pack.data_packet.blocknum = htons(blocknum);
+	memcpy(pack.data_packet.data, data_from_datapacket, MAX_DATA_SIZE);
+	
+	ssize_t sent = sendto(sockfd, &pack, sizeof(pack),0,
+				(struct sockaddr *) sock_inf,socklen);
 				
 	if(sent<0){
 		perror("send to failed\n");
+		exit(1);
 	}
 
 }
@@ -122,22 +138,23 @@ void SendError(int errorcode, int sockfd, struct sockaddr_in *sock_inf,
 			socklen_t socklen, char error_msg[MAX_DATA_SIZE])
 {
 
-	struct error_packet error;
-	error.opcode = ERROR;
-	error.errorcode = errorcode;
-	memcpy(error.errorstring, error_msg, MAX_DATA_SIZE);
+	packet pack;
+	pack.error_packet.opcode = htons(ERROR);
+	pack.error_packet.errorcode = errorcode;
+	memcpy(pack.error_packet.errorstring, error_msg, MAX_DATA_SIZE);
 	
-	ssize_t sent = sendto(sockfd, &error, sizeof(error),0,
-				(struct sockaddr_in *) sock_inf,socklen);
+	ssize_t sent = sendto(sockfd, &pack, sizeof(pack),0,
+				(struct sockaddr *) sock_inf,socklen);
 				
 	if(sent<0){
 		perror("send to failed\n");
+		exit(1);
 	}
 
 }
 
 // recieve read/write request
-void RecvReadWrite(short opcode, byte *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
+void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
 {
     // open new port and bind to socket
 	int					sockfd;
@@ -188,17 +205,102 @@ void RecvReadWrite(short opcode, byte *msg, socklen_t len, struct sockaddr_in *c
     }
     else if ( opcode == WRQ )
     {
+    
+		
         if( fork() == 0 ) // child
         {
-            // loop while still getting datagrams
+			//get file from msg
+			char *file = msg->rw_request.filename;
+			char *filemode = strchr(file,'\0')+1;
+			
+			if(strcasecmp(filemode, "octet")!=0){
+				perror("Invalid octet file mode\n");
+				exit(1);
+			}
+			
+			//create socket endpoint
+			int sockend = Socket(AF_INET, SOCK_DGRAM, 0);
+			if(sockend==-1){
+				perror("socket failed.\n");
+				exit(1);
+			}
+			//then open file
+			FILE *fd = fopen(file,"w");
+			if(fd == NULL)
+			{
+				perror("file couldn't be opened");
+				SendError(errno, sockend, cliaddr, sizeof(*cliaddr), strerror(errno));
+				exit(1);
+			}
+			//send ack 0 packet
+			int blocknum=0;
+			SendAck(blocknum, sockend, cliaddr, len);
+		
+			//loop till all datagrams receieved
+			bool thats_everything = false;
+			while(!thats_everything){
+				//loop till datagram recved (resending lost datagrams, ? number of time)
+				int attempt=10;
+				while(attempt>0)
+				{
+				    socklen_t lenn = sizeof(cliaddr);
+					ssize_t recv = recvfrom(sockend, msg, sizeof(*msg), 0, (struct sockaddr *)cliaddr, &lenn);
+					
+					if(recv<0){
+						perror("recvfrom failed\n");
+					}
+					
+					//check if any data recvd --> rev>4 since opcode+blocknum = 2+2
+					if(recv>=4){
+						//end loop
+						attempt = -1;
+					}
+					
+					if(attempt!=-1){
+						//data packet not received correctly
+						//resend ack packet
+						SendAck(blocknum, sockend, cliaddr, sizeof(*cliaddr));
+					}
+					attempt--;
+				}
+				
+				if(attempt==0){
+					printf("Transfer timed out, abort connection");
+					exit(1);
+				}
+				//error handling
+				blocknum++;
+				
+				if(sizeof(msg->data_packet) >recv)
+				{
+					thats_everything = true;
+				}
+				//write contents in file
+				msg->data_packet.data[512] = '\0';
+				int written = fwrite(msg->data_packet.data, 1,recv-4,fd );
+				if(written < 0)
+				{
+					perror("fwrite failed\n");
+					exit(1);
+				}
+				
+				//send ack for block 1
+				SendAck(blocknum, sockend, cliaddr, sizeof(*cliaddr));
+				
+			}
+			
+            fclose(fd);
+            close(sockend);
         }
+        
     }
 }
+
 
 int main (int argc, char *argv[])
 {
     // NOTE: for Submitty (auto-grader) use only
-    setvbuf( stdout, NULL, _IONBF, 0 ); 
+    setvbuf( stdout, NULL, _IONBF, 0 );
     
     // check number of command line args
     if ( argc != 3 )
@@ -212,12 +314,12 @@ int main (int argc, char *argv[])
     int end_port = atoi(argv[2]);
     int next_port = start_port++;    // set up port for forked process
 
-    if ( start_port < MIN_PORT   || 
-         end_port   < start_port || 
-         end_port   > MAX_PORT ) 
+    if ( start_port < MIN_PORT   ||
+         end_port   < start_port ||
+         end_port   > MAX_PORT )
     {
         fprintf(stderr, "Error: Invalid port number: Must be in range [%d, %d]\n", MIN_PORT, MAX_PORT);
-        return EXIT_FAILURE;        
+        return EXIT_FAILURE;
     }
 
     // create a socket and bind to it
@@ -236,21 +338,22 @@ int main (int argc, char *argv[])
     // setup signal handler
     Signal(SIGCHLD, SigChildHandler);
 
-    int         n;      // recvfrom() response length
-    byte        msg[MAX_MSG_SIZE];  // data recieved from a client
+    int         n;    // recvfrom() response length
+//    char        msg;  // data recieved from a client
     socklen_t   len;
 
     // infinite loop for server
     for ( ; ; )
     {
+		packet msg;
         len = sizeof(cliaddr);
-        n = Recvfrom( sockfd, &msg, MAX_DATA_SIZE, 0, (SA *) &cliaddr, &len );
+        n = Recvfrom( sockfd, &msg, sizeof(msg), 0, (SA *) &cliaddr, &len );
 
         // handle incorrect message lengths??
 
         // get opcode from message
         short raw_opcode;
-        memcpy(&raw_opcode, msg, sizeof(raw_opcode));
+        memcpy(&raw_opcode, &msg, sizeof(raw_opcode));
         short opcode = ntohs(raw_opcode);
 
         // handle new read or write request, other packet types are handled in child fork
@@ -303,7 +406,6 @@ int main (int argc, char *argv[])
 	
 	1. Host A sends  a  "WRQ"  to  host  B  with  source=  A's  TID,
 	   destination= 69.
-
 	2. Host  B  sends  a "ACK" (with block number= 0) to host A with
 	   source= B's TID, destination= A's TID.
 	   
@@ -330,7 +432,6 @@ int main (int argc, char *argv[])
 							if data<512 bytes long, end of transfer after ack
 							(normal termination)
 				
-
 	 2 bytes     2 bytes
 	 ---------------------
 	| Opcode=4 |   Block #  |		ACK packet
@@ -353,3 +454,4 @@ int main (int argc, char *argv[])
 	* TIDs - instead of using random TIDs, use next highest port in the range (next available port?)
 		   - do not reuse ports for TIDs
 */
+
