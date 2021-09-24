@@ -11,12 +11,15 @@
 #include <string.h>
 #include "../unpv13e/lib/unp.h"
 
-#define MAX_DATA_SIZE 512
-#define ABORT_TIMEOUT 10
-#define RETRANSMIT_TIMEOUT 1
+#define MAX_DATA_SIZE       512
+#define MAX_MSG_SIZE        516
+#define ABORT_TIMEOUT       10
+#define RETRANSMIT_TIMEOUT  1
 
 #define MAX_PORT 49151
 #define MIN_PORT 1024
+
+typedef unsigned char byte;
 
 /*
  1     Read request (RRQ)
@@ -43,7 +46,7 @@ struct rw_request{
 struct data_packet{
 	int opcode;
 	int blocknum;
-    int data[MAX_DATA_SIZE];
+    byte datablock[MAX_DATA_SIZE];
 } ;
 
 /* 	  2 bytes     2 bytes
@@ -103,7 +106,7 @@ void SendData(int blocknum, int sockfd, struct sockaddr_in *sock_inf,
 	struct data_packet data;
 	data.opcode = DATA;
 	data.blocknum = blocknum;
-	memcpy(data.data_block, data_from_datapacket, MAX_DATA_SIZE);
+	memcpy(data.datablock, data_from_datapacket, MAX_DATA_SIZE);
 	
 	ssize_t sent = sendto(sockfd, &data, sizeof(data),0,
 				(struct sockaddr_in *) sock_inf,socklen);
@@ -134,11 +137,11 @@ void SendError(int errorcode, int sockfd, struct sockaddr_in *sock_inf,
 }
 
 // recieve read/write request
-void RecvReadWrite(short opcode, char *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
+void RecvReadWrite(short opcode, byte *msg, socklen_t len, struct sockaddr_in *cliaddr, int next_port)
 {
     // open new port and bind to socket
 	int					sockfd;
-	struct sockaddr_in	servaddr, cliaddr;
+	struct sockaddr_in	servaddr;
     int                 n;    // recvfrom() response length
 
 	sockfd = Socket(AF_INET, SOCK_DGRAM, 0);
@@ -156,19 +159,31 @@ void RecvReadWrite(short opcode, char *msg, socklen_t len, struct sockaddr_in *c
     if ( opcode == RRQ )
     {
         // TODO: cast msg to read_request struct
-        
+        struct rw_request r_req;
+        memcpy( &r_req, msg, sizeof(r_req) );
+        char *filename = r_req.filename;
 
         if( fork() == 0 ) // child
         {
-            // TODO: open file
+            // open file
+            FILE *fptr;
+
+            if ( (fptr = fopen(filename,"rb")) == NULL ){
+                fprintf(stderr, "File does not exist!");
+                exit(1);
+            }
 
             int last_dgram = 0;
 
             // loop while still getting datagrams
             while(!last_dgram)
             {
-
+                byte cur_block[MAX_DATA_SIZE];
+                fread(&cur_block, MAX_DATA_SIZE, 1, fptr);
+                last_dgram = 1; // terminate for now
+                // TODO: create data packet and send data to client
             }
+            fclose(fptr);
         }
     }
     else if ( opcode == WRQ )
@@ -221,8 +236,8 @@ int main (int argc, char *argv[])
     // setup signal handler
     Signal(SIGCHLD, SigChildHandler);
 
-    int         n;    // recvfrom() response length
-    char        msg;  // data recieved from a client
+    int         n;      // recvfrom() response length
+    byte        msg[MAX_MSG_SIZE];  // data recieved from a client
     socklen_t   len;
 
     // infinite loop for server
