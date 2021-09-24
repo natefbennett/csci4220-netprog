@@ -19,7 +19,8 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../unpv13e/lib/unp.h"
+//#include "../unpv13e/lib/unp.h"
+#include "unp.h" // for submitty
 
 #define MAX_DATA_SIZE       512
 #define ABORT_TIMEOUT       10
