@@ -19,7 +19,7 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include "../unpv13e/lib/unp.h"
+// #include "../unpv13e/lib/unp.h"
 #include "unp.h" // for submitty
 
 #define MAX_DATA_SIZE       512
@@ -389,7 +389,7 @@ int main (int argc, char *argv[])
     // check if port range correct
     int start_port = atoi(argv[1]);
     int end_port = atoi(argv[2]);
-    int next_port = start_port++;    // set up port for forked process
+    int next_port = start_port+1;    // set up port for forked process
 
     if ( start_port < MIN_PORT   ||
          end_port   < start_port ||
