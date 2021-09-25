@@ -1,6 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+// adjust lib path if "DEV" compiler macro used 
+#ifdef DEV
 #include "../unpv13e/lib/unp.h"
+#endif
+
+// adjust lib path if "SUBMITTY" compiler macro used 
+#ifdef SUBMITTY
+#include "unp.h"
+#endif
 
 int main ()
 {
