@@ -19,8 +19,16 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include "../unpv13e/lib/unp.h"
-#include "unp.h" // for submitty
+
+// adjust lib path if "DEV" compiler macro used 
+#ifdef DEV
+#include "../unpv13e/lib/unp.h"
+#endif
+
+// adjust lib path if "SUBMITTY" compiler macro used 
+#ifdef SUBMITTY
+#include "unp.h"
+#endif
 
 #define MAX_DATA_SIZE       512
 #define MAX_PACKET_LEN      516
