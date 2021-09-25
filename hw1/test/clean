@@ -2,3 +2,4 @@
 
 rm student_long.txt
 rm ../student_long_remote.txt
+rm diff.txt

@@ -19,10 +19,12 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../unpv13e/lib/unp.h"
-// #include "unp.h" // for submitty
+//#include "../unpv13e/lib/unp.h"
+#include "unp.h" // for submitty
 
 #define MAX_DATA_SIZE       512
+#define MAX_PACKET_LEN      516
+#define MIN_PACKET_LEN      4
 #define ABORT_TIMEOUT       10
 #define RETRANSMIT_TIMEOUT  1
 
@@ -30,6 +32,19 @@
 #define MIN_PORT 1024
 
 typedef unsigned char byte;
+
+// define error messages
+char *errorcode[] = 
+{
+    "Not defined, see error message (if any).",   // [0]
+    "File not found.",                            // [1]
+    "Access violation.",                          // [2]
+    "Disk full or allocation exceeded",           // [3]
+    "Illegal TFTP operation.",                    // [4]
+    "Unknown transfer ID.",                       // [5]
+    "File already exists",                        // [6]
+    "No such user."                               // [7]
+};
 
 /*
  1     Read request (RRQ)
@@ -160,7 +175,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
     // open new port and bind to socket
 	int					sockfd;
 	struct sockaddr_in	servaddr;
-    int                 recv; // size return from Recvfrom()
+    int                 recv_size; // eturn from Recvfrom()
 
 	sockfd = Socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -193,7 +208,7 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 			if( fd == NULL )
 			{
 				perror("file couldn't be opened\n");
-				SendError(errno, sockfd, cliaddr, sizeof(*cliaddr), strerror(errno));
+				SendError(errno, sockfd, cliaddr, sizeof(*cliaddr), errorcode[1]);
 				exit(1);
 			}
 
@@ -213,22 +228,28 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
                 // read in data from file
                 chunk_len = fread(data_chunk, 1, MAX_DATA_SIZE, fd);
 
-				// loop till datagram sent over
+				// attempt to send data and wait for ack
 				int attempt = 10;
 				while( attempt > 0 )
 				{
                     SendData(blocknum, sockfd, cliaddr, len, chunk_len, data_chunk);
-				    
-					recv = Recvfrom(sockfd, msg, sizeof(*msg), 0, (struct sockaddr *)cliaddr, &len);
-					
-					if( recv < 0 )
+				    alarm(RETRANSMIT_TIMEOUT); // set an alarm
+					recv_size = Recvfrom(sockfd, msg, sizeof(*msg), 0, (struct sockaddr *)cliaddr, &len);
+					                
+					if( recv_size < 0 )
                     {
+                        // check for timeout
+                        if ( errno == EINTR )
+                        {
+                            printf("Server socket timeout");
+                        }
 						perror("recvfrom failed\n");
 					}
 					
 					//check if any data recvd --> rev>4 since opcode+blocknum = 2+2
-					if( recv >= 4 )
+					if( recv_size >= MIN_PACKET_LEN )
                     {
+                        alarm(0); // cancel alarm, data recieved
 						attempt = -1; // end loop
 					}
 					
@@ -248,32 +269,40 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 
                 // get opcode from message
                 short raw_opcode;
-                memcpy(&raw_opcode, &msg, sizeof(raw_opcode));
+                memcpy(&raw_opcode, msg, sizeof(raw_opcode));
                 opcode = ntohs(raw_opcode);
 
                 // data left to send less than 512 bytes
-				if( sizeof(msg->data_packet) > chunk_len )
+				if( chunk_len < MAX_DATA_SIZE )
 				{
 					thats_everything = true;
 				}
-
-                // TODO: check for error
-
+                
 				// check for acknowledgement
                 if ( opcode == ACK )
                 {
-                    // TODO: validate block number
                     printf("Received ACK (blocknum: %d)\n", blocknum);
-
-                    blocknum++;   
+                 
+                    // validate block number
+                    if ( htons(blocknum) != msg->ack_packet.blocknum )
+                    {
+                        printf("Error wrong block recieved (blocknum: %d)\n",ntohs(msg->ack_packet.blocknum));
+                        SendError(errno, sockfd, cliaddr, sizeof(*cliaddr), "Server recieved wrong block number");
+                        exit(1);
+                    }
                 }
-                // was expecting an ACK, fail
+                // got error message
+                else if ( opcode == ERROR )
+                {
+                    printf("Recieved error from connected client!\n+>Error: %s", msg->error_packet.errorstring);
+                    exit(1);
+                }
+                // was expecting an ACK or Error, fail
                 else
                 {
                     SendError(errno, sockfd, cliaddr, sizeof(*cliaddr), strerror(errno));
-                    exit(1);
                 }
-
+                blocknum++;
 			}
 			
             fclose(fd);
@@ -324,14 +353,14 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 				while(attempt>0)
 				{
 				    socklen_t lenn = sizeof(cliaddr);
-					recv = Recvfrom(sockfd, msg, sizeof(*msg), 0, (struct sockaddr *)cliaddr, &lenn);
+					recv_size = Recvfrom(sockfd, msg, sizeof(*msg), 0, (struct sockaddr *)cliaddr, &lenn);
 					
-					if(recv<0){
+					if(recv_size<0){
 						perror("recvfrom failed\n");
 					}
 					
 					//check if any data recvd --> rev>4 since opcode+blocknum = 2+2
-					if(recv>=4){
+					if( recv_size >= MIN_PACKET_LEN ){
 						//end loop
 						attempt = -1;
 					}
@@ -351,13 +380,13 @@ void RecvReadWrite(short opcode, packet *msg, socklen_t len, struct sockaddr_in 
 				//error handling
 				blocknum++;
 				
-				if(sizeof(msg->data_packet) > recv)
+				if(MAX_DATA_SIZE > recv_size)
 				{
 					thats_everything = true;
 				}
 				//write contents in file
 				msg->data_packet.data[512] = '\0';
-				int written = fwrite(msg->data_packet.data, 1,recv-4,fd );
+				int written = fwrite(msg->data_packet.data, 1,recv_size-4,fd );
 				if(written < 0)
 				{
 					perror("fwrite failed\n");
@@ -392,7 +421,6 @@ int main (int argc, char *argv[])
     // check if port range correct
     int start_port = atoi(argv[1]);
     int end_port = atoi(argv[2]);
-    int next_port = start_port+1;    // set up port for forked process
 
     if ( start_port < MIN_PORT   ||
          end_port   < start_port ||
@@ -418,17 +446,36 @@ int main (int argc, char *argv[])
     // setup signal handler
     Signal(SIGCHLD, SigChildHandler);
 
-    int         n;    // recvfrom() response length
+    int         recv_size;    // Recvfrom() response
     socklen_t   len;
+    int next_port = start_port+1;
 
     // infinite loop for server
     for ( ; ; )
     {
 		packet msg;
         len = sizeof(cliaddr);
-        n = Recvfrom( sockfd, &msg, sizeof(msg), 0, (SA *) &cliaddr, &len );
+        recv_size = Recvfrom( sockfd, &msg, sizeof(msg), 0, (SA *) &cliaddr, &len );
 
-        // handle incorrect message lengths??
+        // handle incorrect message lengths
+        if ( recv_size < MIN_PACKET_LEN )
+        {
+            //TODO: send error
+            printf("Packe recieved too small: %d bytes", recv_size);
+            continue;
+        }
+        else if ( recv_size > MAX_PACKET_LEN )
+        {
+            //TODO: send error
+            printf("Packe recieved too big: %d bytes", recv_size);
+            continue;
+        }
+        else if ( recv_size < 0  )
+        {
+            perror("Recvfrom() failed");
+            continue;
+        }
+
 
         // get opcode from message
         short raw_opcode;
