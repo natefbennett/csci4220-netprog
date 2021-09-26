@@ -13,58 +13,83 @@
 
 #define START_PORT  9877
 #define	MAXLINE		4096
-#define TIMEOUT     10
 
 // read in line of input and send to client
-void SendLine(FILE *fp, int sockfd)
+// return 1 if client disconnects
+// return 0 if reached EOF
+int SendInput(FILE *fp, int sockfd)
 {
-	int			maxfdp1;
-	fd_set		rset;
-	char		sendline[MAXLINE], recvline[MAXLINE];
+	char	sendline[MAXLINE], recvline[MAXLINE];
 
-	FD_ZERO(&rset);
-	for ( ; ; ) {
-		FD_SET(fileno(fp), &rset);
-		FD_SET(sockfd, &rset);
-		maxfdp1 = max(fileno(fp), sockfd) + 1;
-		Select(maxfdp1, &rset, NULL, NULL, NULL);
+	while (Fgets(sendline, MAXLINE, fp) != NULL) {
 
-		if (FD_ISSET(sockfd, &rset)) {	/* socket is readable */
-			if (Readline(sockfd, recvline, MAXLINE) == 0)
-				err_quit("str_cli: server terminated prematurely");
-			Fputs(recvline, stdout);
-		}
+		Writen(sockfd, sendline, strlen(sendline));
 
-		if (FD_ISSET(fileno(fp), &rset)) {  /* input is readable */
-			if (Fgets(sendline, MAXLINE, fp) == NULL)
-				return;		/* all done */
-			Writen(sockfd, sendline, strlen(sendline));
-		}
+		if (Readline(sockfd, recvline, MAXLINE) == 0)
+        {
+            printf("str_cli: client disconnected");
+            return 1;
+        }
+		
+		Fputs(recvline, stdout);
 	}
+    return 0;
 }
 
 int main ( int argc, char *argv[] )
 {
+	if (argc != 2)
+		err_quit("usage: %s <int>", argv[0]);
+
     int port = atoi(argv[1]) + START_PORT;
 
-    int					sockfd;
-	struct sockaddr_in	servaddr;
+    // set up socket for server and bind to it
+    int					listenfd, connfd, sockfd;
+    socklen_t			clilen;
+	struct sockaddr_in	cliaddr, servaddr;
 
-	if (argc != 2)
-		err_quit("usage: %s <port>", argv[0]);
+	listenfd = Socket(AF_INET, SOCK_STREAM, 0);
 
-	sockfd = Socket(AF_INET, SOCK_STREAM, 0);
+    // for debug, solves error on binding, already in use
+    int optval = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, 
+            (const void *)&optval , sizeof(int));
 
+    // set server address and port
 	bzero(&servaddr, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(port);
+	servaddr.sin_family      = AF_INET;
+	servaddr.sin_port        = htons(port);
 	Inet_pton(AF_INET, "127.0.0.1", &servaddr.sin_addr);
 
-	Connect_timeo(sockfd, (SA *) &servaddr, sizeof(servaddr), TIMEOUT);
+    // bind to port and listen on it
+    Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
+    Listen(listenfd, LISTENQ);
 
-    // read in stdin
-    // if EOF close connection
-	SendLine(stdin, sockfd);	
+    clilen = sizeof(cliaddr);
+    int connected = 0;
+    int eof = 0;
+    while( !eof )
+    {
+        // if not already connected, accept connection
+        if ( !connected ) {
+            connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
+            printf(">Accepted connection\n");
+            connected = 1;
+        }
+
+        // accept input from stdin while connected to client
+        while ( connected )
+        {
+            // read in stdin, send to client
+            int disconnected = SendInput(stdin, connfd);
+
+            // client disconnected, accept new connections again
+            if ( disconnected ) { connected = 0; }
+
+            // end of file recieved, shut down server
+            if ( !disconnected ) { eof = 1; break; }
+        }
+    }
 
     return EXIT_SUCCESS;
 }
