@@ -21,8 +21,8 @@ int SendInput(FILE *fp, int sockfd)
 {
 	char	sendline[MAXLINE], recvline[MAXLINE];
 
-	while (Fgets(sendline, MAXLINE, fp) != NULL) {
-
+	while (Fgets(sendline, MAXLINE, fp) != NULL) 
+    {
 		Writen(sockfd, sendline, strlen(sendline));
 
 		if (Readline(sockfd, recvline, MAXLINE) == 0)
@@ -33,6 +33,7 @@ int SendInput(FILE *fp, int sockfd)
 		
 		Fputs(recvline, stdout);
 	}
+    
     return 0;
 }
 
@@ -44,7 +45,7 @@ int main ( int argc, char *argv[] )
     int port = atoi(argv[1]) + START_PORT;
 
     // set up socket for server and bind to it
-    int					listenfd, connfd, sockfd;
+    int					listenfd, connfd;
     socklen_t			clilen;
 	struct sockaddr_in	cliaddr, servaddr;
 
@@ -85,6 +86,7 @@ int main ( int argc, char *argv[] )
 
             // client disconnected, accept new connections again
             if ( disconnected ) { connected = 0; }
+            close(connfd);
 
             // end of file recieved, shut down server
             if ( !disconnected ) { eof = 1; break; }
