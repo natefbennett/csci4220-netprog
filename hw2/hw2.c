@@ -35,6 +35,23 @@ typedef struct {
     int     size;
 } dictionary;
 
+// garbage collection for dictionary
+void RemoveWords( dictionary * dict )
+{
+    for(int i = 0; i < dict->size; i++) {
+        free(dict->words[i]);
+    }
+    free(dict->words);
+    dict->words = NULL;
+    dict->size = 0;
+}
+
+unsigned int SelectWord( dictionary * dict, unsigned int seed )
+{
+    srand(seed);
+    return rand() % dict->size;
+}
+
 void LoadWords( char * filename, dictionary * dict )
 {
     FILE *  fp;
@@ -44,23 +61,33 @@ void LoadWords( char * filename, dictionary * dict )
 
     fp = fopen(filename, "r");
     if ( fp == NULL ) {
-        perror("Error opening file %s: ", filename);
+        perror("Error opening file: ");
         exit(EXIT_FAILURE);
     }
     
-    // allocate memory for words array
-
     // go through file line by line,
     // reallocating words array for each word added
     while ( (read = getline(&line, &len, fp)) != -1 ) {
-        // realloc word array
+
+        // allocations for pointer to word array
+        if ( dict->size == 0 ) {
+            dict->words = calloc( 1, sizeof(char *) );
+        }
+        else {
+            dict->words = realloc( (void *)dict->words, (dict->size+1)*sizeof(char *) );
+        }     
+        
         // allocate for new word of size read
-        printf("Retrieved line of length %zu:\n", read);
-        printf("%s", line);
+        dict->words[dict->size] = calloc( read, sizeof(char) );
+        line[strcspn( line, "\n" )] = 0; // strip newline
+
+        // copy string into allocated memory
+        strncpy( dict->words[dict->size], line, read );
+        dict->size++; // we have added a word
     }
 
     fclose(fp);
-    if (line) { free(line); }
+    if (line) { free(line); } // better safe then sorry according to getline man page
 }
 
 int main ( int argc, char *argv[] )
@@ -81,8 +108,8 @@ int main ( int argc, char *argv[] )
     // networking variables
 	int					i, maxi, maxfd, listenfd, connfd, sockfd, nready;				
 	ssize_t				n;
-	fd_set				rset, allset;
-	char				buf[MAX_WORD_LENGTH];
+	fd_set				rset, allset;          // rset = ready sockets returned from select
+	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
 	socklen_t			clilen;
 	struct sockaddr_in	cliaddr, servaddr;    
     user                active_users[MAX_CONNECTIONS];
@@ -90,7 +117,10 @@ int main ( int argc, char *argv[] )
     // open supplied dictionary_file
     // read contents into array, preserving the order
     dictionary dict;
+    dict.size = 0;
+    dict.words = NULL;
     LoadWords( dictionary_file, &dict );
+    unsigned int word_index = SelectWord( &dict, seed );
 
     // bind to port and setup internet address for listening
     listenfd = Socket(AF_INET, SOCK_STREAM, 0);
@@ -107,10 +137,9 @@ int main ( int argc, char *argv[] )
     // setup client array for select
 
     // server loop
+    /*
     for ( ; ; )
     {
-
-        // srand(seed) then rand() % dictionary_size
 
         bool game_won = false;
 
@@ -123,7 +152,7 @@ int main ( int argc, char *argv[] )
         }
 
     }
-
-
+    */
+    RemoveWords( &dict );
     return EXIT_SUCCESS;
 }

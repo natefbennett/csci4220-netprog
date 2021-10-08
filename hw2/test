@@ -1,0 +1,3 @@
+
+# ./word_guess.out [seed] [port] [dictionary_file] [longest_word_length]
+./word_guess.out    42     1234   words.txt         1024 
