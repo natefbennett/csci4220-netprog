@@ -1,4 +1,4 @@
-// Author(s): Nate Bennett, Anisha Halwai 
+// Author(s): Nate Bennett, Anisha Halwai
 // Date:      10/18/21
 // File:      hw2.c
 //
@@ -9,13 +9,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "../../unpv13e/lib/unp.h"
 
-// adjust lib path if "DEV" compiler macro used 
+// adjust lib path if "DEV" compiler macro used
 #ifdef DEV
 #include "../unpv13e/lib/unp.h"
 #endif
 
-// adjust lib path if "SUBMITTY" compiler macro used 
+// adjust lib path if "SUBMITTY" compiler macro used
 #ifdef SUBMITTY
 #include "unp.h"
 #endif
@@ -75,7 +76,7 @@ void LoadWords( char * filename, dictionary * dict )
         }
         else {
             dict->words = realloc( (void *)dict->words, (dict->size+1)*sizeof(char *) );
-        }     
+        }
         
         // allocate for new word of size read
         dict->words[dict->size] = calloc( read, sizeof(char) );
@@ -102,16 +103,17 @@ int main ( int argc, char *argv[] )
     unsigned int                  seed = atoi(argv[1]);
     unsigned short                port = atoi(argv[2]);
     unsigned short longest_word_length = atoi(argv[4]);
-    char *             dictionary_file =      argv[3]; 
+    char *             dictionary_file =      argv[3];
     
 
     // networking variables
-	int					i, maxi, maxfd, listenfd, connfd, sockfd, nready;				
+	int					i, maxi, maxfd, listenfd, connfd, sockfd, nready;
+	int					client[FD_SETSIZE];
 	ssize_t				n;
 	fd_set				rset, allset;          // rset = ready sockets returned from select
 	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
 	socklen_t			clilen;
-	struct sockaddr_in	cliaddr, servaddr;    
+	struct sockaddr_in	cliaddr, servaddr;
     user                active_users[MAX_CONNECTIONS];
 
     // open supplied dictionary_file
@@ -132,18 +134,22 @@ int main ( int argc, char *argv[] )
 
 	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
 
-	Listen(listenfd, LISTENQ);
-
+	maxfd = listenfd;			/* initialize */
+	maxi = -1;					/* index into client[] array */
+	for (i = 0; i < FD_SETSIZE; i++)
+		client[i] = -1;			/* -1 indicates available entry */
+	FD_ZERO(&allset);
+	FD_SET(listenfd, &allset);
     // setup client array for select
 
     // server loop
-    /*
+	/*
     for ( ; ; )
     {
 
         bool game_won = false;
 
-        // game loop 
+        // game loop
         while ( !game_won )
         {
             // welcome new client connection
@@ -153,6 +159,74 @@ int main ( int argc, char *argv[] )
 
     }
     */
+    
+	for ( ; ; ) {
+			/* 	when client joins: print welcome message
+				ask for username
+				store username
+				if client 2 joins, ask for username, username should be unique
+				once a client disconnects, delete their username from stored usernames
+				
+			*/
+			rset = allset;		/* structure assignment */
+			nready = Select(maxfd+1, &rset, NULL, NULL, NULL);
+			if (FD_ISSET(listenfd, &rset) && maxi <= MAX_CONNECTIONS){
+				
+				if (FD_ISSET(listenfd, &rset)) {	/* new client connection */
+					
+					//welcome message
+					printf("Welcome to Guess the Word, please enter your username.\n");
+					
+					clilen = sizeof(cliaddr);
+					connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
+
+
+					for (i = 0; i < FD_SETSIZE; i++)
+						if (client[i] < 0) {
+							client[i] = connfd;	/* save descriptor */
+							break;
+						}
+					if (i == FD_SETSIZE)
+						err_quit("too many clients");
+
+					FD_SET(connfd, &allset);	/* add new descriptor to set */
+					if (connfd > maxfd)
+						maxfd = connfd;			/* for select */
+					if (i > maxi)
+						maxi = i;				/* max index in client[] array */
+
+					if (--nready <= 0)
+						continue;				/* no more readable descriptors */
+				}
+
+				for (i = 0; i <= maxi; i++) {	/* check all clients for data */
+					if ( (sockfd = client[i]) < 0){
+						continue;
+					}
+					if (FD_ISSET(sockfd, &rset)) {
+						//read from client
+						if ( (n = Read(sockfd, buf, MAXLINE)) == 0) {
+								/*4connection closed by client */
+							Close(sockfd);
+							FD_CLR(sockfd, &allset);
+							client[i] = -1;
+						} else
+							/*check if username already exists
+							  loop to check if client file descriptor already exists in active users
+							  if yes: data is part of game
+							  if no: data is username, store file descriptor
+							*/
+							for(int i=0; i<MAX_CONNECTIONS; i++){
+								
+							}
+							Writen(sockfd, buf, n);
+
+						if (--nready <= 0)
+							break;				/* no more readable descriptors */
+					}
+				}
+			}
+		}
     RemoveWords( &dict );
     return EXIT_SUCCESS;
 }
