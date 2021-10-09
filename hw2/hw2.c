@@ -238,16 +238,14 @@ int main ( int argc, char *argv[] )
 						{
 							/*check if username already exists
 							  loop to check if client file descriptor already exists in active users
-							  if yes: data is part of game
-							  if no: data is username, store file descriptor
 							*/
 							
 							bool exist = false;
-							for(int i=0; i<MAX_CONNECTIONS; i++){
+							for(int x=0; x<MAX_CONNECTIONS; x++){
 								
-								//case 1: new cli fd sending data
-								// then that cli fd is sending username
-								if(strcmp(active_users[i].name,buf)==0 && active_users[i].clifd!=sockfd)
+								//check if any active users have buf as username
+								//to be safe, also check if current cli has been saved (unnecessary)
+								if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
 								{
 									//client fd exists with username, ask for different username
 									printf("Username %s is already taken, please enter a different username\n",buf);
@@ -255,12 +253,6 @@ int main ( int argc, char *argv[] )
 									break;
 								}
 								
-								//case 2: already stored cli fd sending data
-								// then cli fd is sending data for game
-								else if(active_users[i].clifd==sockfd)
-								{
-									
-								}
 							}
 							
 							//username does not exist, store username and client fd
@@ -269,6 +261,12 @@ int main ( int argc, char *argv[] )
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
+							}
+							
+							else
+							{
+								//some client sending data
+								//start game
 							}
 							
 //							Writen(sockfd, buf, n);
