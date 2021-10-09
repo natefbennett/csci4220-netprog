@@ -239,35 +239,45 @@ int main ( int argc, char *argv[] )
 							/*check if username already exists
 							  loop to check if client file descriptor already exists in active users
 							*/
-							
-							bool exist = false;
+							bool cli_exists = false;
 							for(int x=0; x<MAX_CONNECTIONS; x++){
-								
-								//check if any active users have buf as username
-								//to be safe, also check if current cli has been saved (unnecessary)
-								if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
-								{
-									//client fd exists with username, ask for different username
-									printf("Username %s is already taken, please enter a different username\n",buf);
-									exist = true;
-									break;
+								if(active_users[x].clifd==sockfd){
+									cli_exists = true;
 								}
-								
+							}
+							
+							if(cli_exists)
+							{
+								//some client sending data
+								//start game
+							}
+							
+							bool username_exist = false;
+							if(!cli_exists){
+								//if client does not exist, check if username exists
+								for(int x=0; x<MAX_CONNECTIONS; x++){
+									
+									//check if any active users have buf as username
+									//to be safe, also check if current cli has been saved (unnecessary)
+									if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
+									{
+										//client fd exists with username, ask for different username
+										printf("Username %s is already taken, please enter a different username\n",buf);
+										username_exist = true;
+										break;
+									}
+								}
 							}
 							
 							//username does not exist, store username and client fd
-							if(!exist)
+							if(!username_exist)
 							{
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
 							}
 							
-							else
-							{
-								//some client sending data
-								//start game
-							}
+							
 							
 //							Writen(sockfd, buf, n);
 						}
