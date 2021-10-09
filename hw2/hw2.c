@@ -24,6 +24,7 @@
 #define MAX_WORD_LENGTH 1024
 #define MAX_CONNECTIONS 5
 
+int count_users = 0;
 // structure for relating a name to clifd
 typedef struct {
     int    clifd;  // client file descriptor
@@ -36,6 +37,22 @@ typedef struct {
     int     size;
 } dictionary;
 
+//delete user from active users
+//called once cli fd is closed
+void DeleteUser(user * active, int clifd)
+{
+	for(int i=0; i<MAX_CONNECTIONS; i++)
+	{
+		if(active[i].clifd==clifd)
+		{
+			for(int j=i; j<MAX_CONNECTIONS-1;j++)
+			{
+				active[j] = active[j-1];
+			}
+			return;
+		}
+	}
+}
 // garbage collection for dictionary
 void RemoveWords( dictionary * dict )
 {
@@ -203,24 +220,58 @@ int main ( int argc, char *argv[] )
 					if ( (sockfd = client[i]) < 0){
 						continue;
 					}
-					if (FD_ISSET(sockfd, &rset)) {
+					if (FD_ISSET(sockfd, &rset)){
 						//read from client
-						if ( (n = Read(sockfd, buf, MAXLINE)) == 0) {
-								/*4connection closed by client */
+						if ( (n = Read(sockfd, buf, MAXLINE)) == 0)
+						{
+							/*4connection closed by client */
+							
+							//deleting user from active_users
+							DeleteUser(active_users, sockfd);
 							Close(sockfd);
 							FD_CLR(sockfd, &allset);
 							client[i] = -1;
-						} else
+							
+						}
+						
+						else
+						{
 							/*check if username already exists
 							  loop to check if client file descriptor already exists in active users
-							  if yes: data is part of game
-							  if no: data is username, store file descriptor
 							*/
-							for(int i=0; i<MAX_CONNECTIONS; i++){
+							
+							bool exist = false;
+							for(int x=0; x<MAX_CONNECTIONS; x++){
+								
+								//check if any active users have buf as username
+								//to be safe, also check if current cli has been saved (unnecessary)
+								if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
+								{
+									//client fd exists with username, ask for different username
+									printf("Username %s is already taken, please enter a different username\n",buf);
+									exist = true;
+									break;
+								}
 								
 							}
-							Writen(sockfd, buf, n);
-
+							
+							//username does not exist, store username and client fd
+							if(!exist)
+							{
+								strcpy(active_users[count_users].name,buf);
+								active_users[count_users].clifd = sockfd;
+								count_users++;
+							}
+							
+							else
+							{
+								//some client sending data
+								//start game
+							}
+							
+//							Writen(sockfd, buf, n);
+						}
+						
 						if (--nready <= 0)
 							break;				/* no more readable descriptors */
 					}
