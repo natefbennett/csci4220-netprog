@@ -158,8 +158,8 @@ int main ( int argc, char *argv[] )
 	fd_set				rset, allset;          // rset = ready sockets returned from select
 	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
 	char *              msg;
-	socklen_t			clilen;
 	struct sockaddr_in	cliaddr;
+	socklen_t           clilen = sizeof(cliaddr);
     user                active_users[MAX_CONNECTIONS];
 
     // open supplied dictionary_file
@@ -203,128 +203,166 @@ int main ( int argc, char *argv[] )
     }
     */
     
-	for ( ; ; ) {
-			/* 	when client joins: print welcome message
-				ask for username
-				store username
-				if client 2 joins, ask for username, username should be unique
-				once a client disconnects, delete their username from stored usernames
-				
-			*/
-			rset = allset;		/* structure assignment */
-			nready = Select(maxfd+1, &rset, NULL, NULL, NULL);
-			if (FD_ISSET(listenfd, &rset) && maxi <= MAX_CONNECTIONS){
-				
-				if (FD_ISSET(listenfd, &rset)) {	/* new client connection */
-						
-					clilen = sizeof(cliaddr);
-					connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
+	for ( ; ; ) 
+	{
+		/* 	when client joins: print welcome message
+			ask for username
+			store username
+			if client 2 joins, ask for username, username should be unique
+			once a client disconnects, delete their username from stored usernames
+			
+		*/
+		rset = allset; // reset rset because is changed with every select() call
+		nready = Select(maxfd+1, &rset, NULL, NULL, NULL);
 
-					for (i = 0; i < FD_SETSIZE; i++)
-						if (client[i] < 0) {
-							client[i] = connfd;	/* save descriptor */
-							break;
-						}
-					if (i == FD_SETSIZE)
-						err_quit("too many clients");
+		#ifdef DEBUG
+		printf("DEBUG: new select() call -> nready: %d\n", nready);
+		#endif
+			
+		// accept new client connection
+		if ( FD_ISSET(listenfd, &rset) ) 
+		{
+			connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
 
-					// send welcome message to new client
-					msg = "Welcome to Guess the Word, please enter your username.\n";
-					Writen(connfd, msg, strlen(msg));
+			#ifdef DEBUG
+			printf("DEBUG: new connection recieved -> connfd: %d\n", connfd);
+			#endif
 
-					FD_SET(connfd, &allset);	/* add new descriptor to set */
-					if (connfd > maxfd)
-						maxfd = connfd;			/* for select */
-					if (i > maxi)
-						maxi = i;				/* max index in client[] array */
-
-					if (--nready <= 0)
-						continue;				/* no more readable descriptors */
-				}
-
-				// check all clients for data
-				for (i = 0; i <= maxi; i++) 
-				{
-					#ifdef DEBUG
-					printf("DEBUG: checking for data -> client[%d]\n", i);
-					#endif 
-					// skip if no data
-					if ( (sockfd = client[i]) < 0 ) {
-						continue;
-					}
-					// process data from client
-					if (FD_ISSET(sockfd, &rset))
-					{
-						// read from client and check for EOF
-						if ( (n = Read(sockfd, buf, MAX_WORD_LENGTH)) == 0 )
-						{
-							// deleting user from active_users
-							DeleteUser(active_users, sockfd);
-							Close(sockfd);
-							FD_CLR(sockfd, &allset);
-							client[i] = -1;
-						}
-						else
-						{
-							/*check if username already exists
-							  loop to check if client file descriptor already exists in active users
-							*/
-							bool cli_exists = false;
-							for(int x=0; x<MAX_CONNECTIONS; x++){
-								if(active_users[x].clifd==sockfd){
-									cli_exists = true;
-								}
-							}
-							
-							if(cli_exists)
-							{
-								//some client sending data
-								//start game
-							}
-							
-							bool username_exist = false;
-							if(!cli_exists){
-								//if client does not exist, check if username exists
-								for(int x=0; x<MAX_CONNECTIONS; x++){
-									
-									//check if any active users have buf as username
-									//to be safe, also check if current cli has been saved (unnecessary)
-									if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
-									{
-										//client fd exists with username, ask for different username
-										// send message to client
-										sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
-										Writen(sockfd, msg, strlen(msg));
-
-										username_exist = true;
-										break;
-									}
-								}
-							}
-							
-							//username does not exist, store username and client fd
-							if(!username_exist)
-							{
-								// send message to client
-								sprintf(msg, "Let's start playing, %s\n", buf);
-								Writen(sockfd, msg, strlen(msg));
-
-								strcpy(active_users[count_users].name,buf);
-								active_users[count_users].clifd = sockfd;
-								count_users++;
-								#ifdef DEBUG
-								printf("DEBUG: adding new user -> active_users[%d]: \"%s\"\n", count_users, buf);
-								#endif 
-							}
-							
-						}
-						
-						if (--nready <= 0)
-							break;				/* no more readable descriptors */
-					}
+			// find open slot to store new file descriptor
+			for ( i = 0; i < FD_SETSIZE; i++ )
+			{
+				if ( client[i] < 0 ) {
+					client[i] = connfd;
+					break;
 				}
 			}
+	
+			if ( i == FD_SETSIZE ) {
+				err_quit("FD_SETSIZE reached, too many clients");
+			}
+
+			#ifdef DEBUG
+			printf("DEBUG: connection saved -> client[%d]: %d\n", i, connfd);
+			#endif
+
+			// send welcome message to new client
+			msg = "Welcome to Guess the Word, please enter your username.\n";
+			Writen(connfd, msg, strlen(msg));
+
+			FD_SET(connfd, &allset); // add new descriptor to allset
+
+			// increase max file descriptor and max index if needed
+			if ( connfd > maxfd ) {
+				maxfd = connfd;
+				#ifdef DEBUG
+				printf("DEBUG: increased maxfd -> maxfd: %d\n", maxfd);
+				#endif
+			}
+			if ( i > maxi ) {
+				maxi = i; // max index in client[] array
+				#ifdef DEBUG
+				printf("DEBUG: increased maxi -> maxi: %d\n", maxi);
+				#endif
+			}
+
+			// finished processing new file descriptor, decrement number of fd ready
+			// call select again if no more descriptors are ready for reading
+			if ( --nready <= 0 ) {
+				#ifdef DEBUG
+				printf("DEBUG: no more fd to read -> nready: %d\n", nready);
+				#endif
+				continue;
+			}
 		}
+
+		// check all clients for data
+		for (i = 0; i <= maxi; i++) 
+		{
+			#ifdef DEBUG
+			printf("DEBUG: checking for data -> client[%d]\n", i);
+			#endif 
+			// skip if no data
+			if ( (sockfd = client[i]) < 0 ) {
+				continue;
+			}
+			// process data from client
+			if (FD_ISSET(sockfd, &rset))
+			{
+				// read from client and check for EOF
+				if ( (n = Read(sockfd, buf, MAX_WORD_LENGTH)) == 0 )
+				{
+					// deleting user from active_users
+					DeleteUser(active_users, sockfd);
+					Close(sockfd);
+					FD_CLR(sockfd, &allset);
+					client[i] = -1;
+				}
+				else
+				{
+					/*check if username already exists
+						loop to check if client file descriptor already exists in active users
+					*/
+					bool cli_exists = false;
+					for(int x=0; x<MAX_CONNECTIONS; x++){
+						if(active_users[x].clifd==sockfd){
+							cli_exists = true;
+						}
+					}
+					
+					if(cli_exists)
+					{
+						//some client sending data
+						//start game
+					}
+					
+					bool username_exist = false;
+					if(!cli_exists){
+						//if client does not exist, check if username exists
+						for(int x=0; x<MAX_CONNECTIONS; x++){
+							
+							//check if any active users have buf as username
+							//to be safe, also check if current cli has been saved (unnecessary)
+							if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
+							{
+								//client fd exists with username, ask for different username
+								// send message to client
+								sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
+								Writen(sockfd, msg, strlen(msg));
+
+								username_exist = true;
+								break;
+							}
+						}
+					}
+					
+					//username does not exist, store username and client fd
+					if(!username_exist)
+					{
+						// send message to client
+						sprintf(msg, "Let's start playing, %s\n", buf);
+						Writen(sockfd, msg, strlen(msg));
+
+						strcpy(active_users[count_users].name,buf);
+						active_users[count_users].clifd = sockfd;
+						count_users++;
+						#ifdef DEBUG
+						printf("DEBUG: adding new user -> active_users[%d]: \"%s\"\n", count_users, buf);
+						#endif 
+					}
+					
+				}
+				
+				// no more readable file descriptors
+				if (--nready <= 0) {
+					#ifdef DEBUG
+					printf("DEBUG: no more fd to read -> nready: %d\n", nready);
+					#endif
+					break;
+				}
+					
+			}
+		}
+	}
     RemoveWords( &dict );
     return EXIT_SUCCESS;
 }
