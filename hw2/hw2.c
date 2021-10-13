@@ -108,6 +108,23 @@ void LoadWords( char * filename, dictionary * dict )
     if (line) { free(line); } // better safe then sorry according to getline man page
 }
 
+int SetupServer( unsigned short port )
+{
+    struct sockaddr_in servaddr;
+    int listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+
+	bzero(&servaddr, sizeof(servaddr));
+	servaddr.sin_family      = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port        = htons(port);
+
+	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
+
+	Listen(listenfd, LISTENQ);
+
+    return listenfd;
+}
+
 int main ( int argc, char *argv[] )
 {
     
@@ -124,13 +141,13 @@ int main ( int argc, char *argv[] )
     
 
     // networking variables
-	int					i, maxi, maxfd, listenfd, connfd, sockfd, nready;
+	int					i, maxi, maxfd, connfd, sockfd, nready;
 	int					client[FD_SETSIZE];
 	ssize_t				n;
 	fd_set				rset, allset;          // rset = ready sockets returned from select
 	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
 	socklen_t			clilen;
-	struct sockaddr_in	cliaddr, servaddr;
+	struct sockaddr_in	cliaddr;
     user                active_users[MAX_CONNECTIONS];
 
     // open supplied dictionary_file
@@ -142,22 +159,19 @@ int main ( int argc, char *argv[] )
     unsigned int word_index = SelectWord( &dict, seed );
 
     // bind to port and setup internet address for listening
-    listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+    int listenfd = SetupServer( port );
 
-	bzero(&servaddr, sizeof(servaddr));
-	servaddr.sin_family      = AF_INET;
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port        = htons(SERV_PORT);
+	maxfd = listenfd;	 // initialize with current fd
+	maxi = -1;	         // index into client[] array
 
-	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
-
-	maxfd = listenfd;			/* initialize */
-	maxi = -1;					/* index into client[] array */
-	for (i = 0; i < FD_SETSIZE; i++)
-		client[i] = -1;			/* -1 indicates available entry */
+	// setup client array for select
+	// -1 indicates available entry
+	for (i = 0; i < FD_SETSIZE; i++) {
+		client[i] = -1;
+	}
+		
 	FD_ZERO(&allset);
 	FD_SET(listenfd, &allset);
-    // setup client array for select
 
     // server loop
 	/*
@@ -190,13 +204,9 @@ int main ( int argc, char *argv[] )
 			if (FD_ISSET(listenfd, &rset) && maxi <= MAX_CONNECTIONS){
 				
 				if (FD_ISSET(listenfd, &rset)) {	/* new client connection */
-					
-					//welcome message
-					printf("Welcome to Guess the Word, please enter your username.\n");
-					
+						
 					clilen = sizeof(cliaddr);
 					connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
-
 
 					for (i = 0; i < FD_SETSIZE; i++)
 						if (client[i] < 0) {
@@ -275,11 +285,11 @@ int main ( int argc, char *argv[] )
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
+								//welcome message
+								char msg[] = "Welcome to Guess the Word, please enter your username.\n";
+								Writen(sockfd, msg, strlen(msg));
 							}
 							
-							
-							
-//							Writen(sockfd, buf, n);
 						}
 						
 						if (--nready <= 0)
