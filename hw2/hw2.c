@@ -216,6 +216,10 @@ int main ( int argc, char *argv[] )
 					if (i == FD_SETSIZE)
 						err_quit("too many clients");
 
+					//welcome message
+					char msg[] = "Welcome to Guess the Word, please enter your username.\n";
+					Writen(connfd, msg, strlen(msg));
+
 					FD_SET(connfd, &allset);	/* add new descriptor to set */
 					if (connfd > maxfd)
 						maxfd = connfd;			/* for select */
@@ -285,9 +289,6 @@ int main ( int argc, char *argv[] )
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
-								//welcome message
-								char msg[] = "Welcome to Guess the Word, please enter your username.\n";
-								Writen(sockfd, msg, strlen(msg));
 							}
 							
 						}
