@@ -20,3 +20,6 @@ endif
 
 hw2: hw2.c
 	$(CC) -o word_guess.out hw2.c $(libunp) $(CFLAGS) -D $(MACRO)
+
+clean:
+	rm -f *.o *.out

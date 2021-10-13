@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include "../../unpv13e/lib/unp.h"
+// #include "../../unpv13e/lib/unp.h"
 
 // adjust lib path if "DEV" compiler macro used
 #ifdef DEV
@@ -146,6 +146,7 @@ int main ( int argc, char *argv[] )
 	ssize_t				n;
 	fd_set				rset, allset;          // rset = ready sockets returned from select
 	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
+	char *              msg;
 	socklen_t			clilen;
 	struct sockaddr_in	cliaddr;
     user                active_users[MAX_CONNECTIONS];
@@ -216,8 +217,8 @@ int main ( int argc, char *argv[] )
 					if (i == FD_SETSIZE)
 						err_quit("too many clients");
 
-					//welcome message
-					char msg[] = "Welcome to Guess the Word, please enter your username.\n";
+					// send welcome message to new client
+					msg = "Welcome to Guess the Word, please enter your username.\n";
 					Writen(connfd, msg, strlen(msg));
 
 					FD_SET(connfd, &allset);	/* add new descriptor to set */
@@ -276,7 +277,10 @@ int main ( int argc, char *argv[] )
 									if(strcmp(active_users[x].name,buf)==0 && active_users[x].clifd!=client[i])
 									{
 										//client fd exists with username, ask for different username
-										printf("Username %s is already taken, please enter a different username\n",buf);
+										// send message to client
+										sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
+										Writen(connfd, msg, strlen(msg));
+
 										username_exist = true;
 										break;
 									}
@@ -286,6 +290,10 @@ int main ( int argc, char *argv[] )
 							//username does not exist, store username and client fd
 							if(!username_exist)
 							{
+								// send message to client
+								sprintf(msg, "Let's start playing, %s\n", buf);
+								Writen(connfd, msg, strlen(msg));
+
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
