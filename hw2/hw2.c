@@ -9,11 +9,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-// #include "../../unpv13e/lib/unp.h"
 
-// adjust lib path if "DEV" compiler macro used
-#ifdef DEV
+// adjust lib path if "DEV1" compiler macro used
+// for nate
+#ifdef DEV1
 #include "../unpv13e/lib/unp.h"
+#endif
+
+// adjust lib path if "DEV2" compiler macro used
+// for anisha
+#ifdef DEV2
+#include "../../unpv13e/lib/unp.h"
 #endif
 
 // adjust lib path if "SUBMITTY" compiler macro used
@@ -45,6 +51,9 @@ void DeleteUser(user * active, int clifd)
 	{
 		if(active[i].clifd==clifd)
 		{
+			#ifdef DEBUG
+			printf("DEBUG: deleting user -> active[%d]: \"%s\"\n", i, active[i].name);
+			#endif
 			for(int j=i; j<MAX_CONNECTIONS-1;j++)
 			{
 				active[j] = active[j-1];
@@ -127,6 +136,8 @@ int SetupServer( unsigned short port )
 
 int main ( int argc, char *argv[] )
 {
+	// NOTE: for Submitty (auto-grader) use only
+    setvbuf( stdout, NULL, _IONBF, 0 );
     
     if ( argc != 5 ) {
         fprintf( stderr, "Usage: %s [seed] [port] [dictionary_file] [longest_word_length]\n", argv[0] );
@@ -231,24 +242,28 @@ int main ( int argc, char *argv[] )
 						continue;				/* no more readable descriptors */
 				}
 
-				for (i = 0; i <= maxi; i++) {	/* check all clients for data */
-					if ( (sockfd = client[i]) < 0){
+				// check all clients for data
+				for (i = 0; i <= maxi; i++) 
+				{
+					#ifdef DEBUG
+					printf("DEBUG: checking for data -> client[%d]\n", i);
+					#endif 
+					// skip if no data
+					if ( (sockfd = client[i]) < 0 ) {
 						continue;
 					}
-					if (FD_ISSET(sockfd, &rset)){
-						//read from client
-						if ( (n = Read(sockfd, buf, MAXLINE)) == 0)
+					// process data from client
+					if (FD_ISSET(sockfd, &rset))
+					{
+						// read from client and check for EOF
+						if ( (n = Read(sockfd, buf, MAX_WORD_LENGTH)) == 0 )
 						{
-							/*4connection closed by client */
-							
-							//deleting user from active_users
+							// deleting user from active_users
 							DeleteUser(active_users, sockfd);
 							Close(sockfd);
 							FD_CLR(sockfd, &allset);
 							client[i] = -1;
-							
 						}
-						
 						else
 						{
 							/*check if username already exists
@@ -279,7 +294,7 @@ int main ( int argc, char *argv[] )
 										//client fd exists with username, ask for different username
 										// send message to client
 										sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
-										Writen(connfd, msg, strlen(msg));
+										Writen(sockfd, msg, strlen(msg));
 
 										username_exist = true;
 										break;
@@ -292,11 +307,14 @@ int main ( int argc, char *argv[] )
 							{
 								// send message to client
 								sprintf(msg, "Let's start playing, %s\n", buf);
-								Writen(connfd, msg, strlen(msg));
+								Writen(sockfd, msg, strlen(msg));
 
 								strcpy(active_users[count_users].name,buf);
 								active_users[count_users].clifd = sockfd;
 								count_users++;
+								#ifdef DEBUG
+								printf("DEBUG: adding new user -> active_users[%d]: \"%s\"\n", count_users, buf);
+								#endif 
 							}
 							
 						}
