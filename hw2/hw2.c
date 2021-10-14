@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 // adjust lib path if "DEV1" compiler macro used
 // for nate
@@ -98,6 +99,18 @@ bool ClientIsActiveUser( user * active, int clifd )
 	return false;
 }
 
+// assumes clifd is an active user
+char * GetUserName( user * active, int clifd )
+{
+	for( int i = 0; i < MAX_CONNECTIONS; i++ ) {
+		if( active[i].clifd == clifd ) {
+			return active[i].name;
+			break;
+		}
+	}
+	return (char *)NULL;
+}
+
 // garbage collection for dictionary
 void RemoveWords( dictionary * dict )
 {
@@ -107,12 +120,6 @@ void RemoveWords( dictionary * dict )
     free(dict->words);
     dict->words = NULL;
     dict->size = 0;
-}
-
-unsigned int SelectWord( dictionary * dict, unsigned int seed )
-{
-    srand(seed);
-    return rand() % dict->size;
 }
 
 void LoadWords( char * filename, dictionary * dict )
@@ -178,16 +185,38 @@ int SetupServer( unsigned short port )
 }
 
 // game method, find number of correct letters in guess
-int GradeCorrect(char * word_guess, char * word)
+int GradeCorrect(char * word_guess, char * word, int len)
 {
 	int letters_correct = 0;
+	char word_target[len]; // make a copy since we will be modifying it
+	strncpy(word_target, word, len);
+
+	// loop though letters in word_guess
+	for (int i = 0; i < len; i++) 
+	{
+		// loop through letters in word_target
+		for (int j = 0; j < len; j++)
+		{
+			if ( tolower(word_guess[i]) == tolower(word_target[j]) ) {
+				word_target[j] = 0; // mark char as counted
+				letters_correct++;
+				break;
+			}
+		}
+	}
 	return letters_correct;
 }
 
 // game method, find number of correctly placed letters in guess
-int GradePlacement(char * word_guess, char * word)
+// assumes word_guess and word are of equal length
+int GradePlacement(char * word_guess, char * word, int len)
 {
 	int letters_placed = 0;
+	for (int i = 0; i < len; i++) {
+		if ( tolower(word_guess[i]) == tolower(word[i]) ) {
+			letters_placed++;
+		}
+	}
 	return letters_placed;
 }
 
@@ -224,7 +253,10 @@ int main ( int argc, char *argv[] )
     dict.size = 0;
     dict.words = NULL;
     LoadWords( dictionary_file, &dict );
-    unsigned int word_index = SelectWord( &dict, seed );
+	
+	// select "random" word
+	srand(seed);
+    unsigned int word_index = rand() % dict.size;
 
 	// initialize active users
 	for ( i = 0; i < MAX_CONNECTIONS; i++)
@@ -248,33 +280,9 @@ int main ( int argc, char *argv[] )
 	FD_ZERO(&allset);
 	FD_SET(listenfd, &allset);
 
-    // server loop
-	/*
-    for ( ; ; )
-    {
-
-        bool game_won = false;
-
-        // game loop
-        while ( !game_won )
-        {
-            // welcome new client connection
-            // username case insensitive
-            printf("Welcome to Guess the Word, please enter your username.\n");
-        }
-
-    }
-    */
-    
+	// server loop
 	for ( ; ; ) 
 	{
-		/* 	when client joins: print welcome message
-			ask for username
-			store username
-			if client 2 joins, ask for username, username should be unique
-			once a client disconnects, delete their username from stored usernames
-			
-		*/
 		rset = allset; // reset rset because is changed with every select() call
 		nready = Select(maxfd+1, &rset, NULL, NULL, NULL);
 
@@ -396,35 +404,77 @@ int main ( int argc, char *argv[] )
 						printf("       target word:   \"%s\"\n", dict.words[word_index] );
 						#endif
 
-						// "Invalid guess length. The secret word is 5 letter(s)."
-						if ( strlen(buf) != strlen(dict.words[word_index]) )
+						unsigned long word_len = strlen(dict.words[word_index]);
+
+						// word guess is not the same length as the word, continue
+						if ( strlen(buf) != word_len )
 						{
-							snprintf(msg, MAX_MSG_LENGTH, "Invalid guess length. The secret word is %lu letter(s).\n", strlen(dict.words[word_index]));
+							snprintf(msg, MAX_MSG_LENGTH, "Invalid guess length. The secret word is %lu letter(s).\n", word_len);
 							Writen(sockfd, msg, strlen(msg));
+							continue;
 						}
 
-						int letters_correct = GradeCorrect(buf, dict.words[word_index]);
-						int letters_placed = GradePlacement(buf, dict.words[word_index]);
+						int letters_correct = GradeCorrect(buf, dict.words[word_index], word_len);
+						int letters_placed = GradePlacement(buf, dict.words[word_index], word_len);
+						bool game_won = false;
 
-						// send message to all user with info about guess
+						// send message to all users with info about word guess
 						for( j = 0; j < MAX_CONNECTIONS; j++ )
 						{
 							if( active_users[j].clifd != -1 )
 							{
 								// check if word guess was correct
-								if ( letters_correct == strlen(dict.words[word_index]) )
+								if ( letters_placed == word_len )
 								{
-									// print out Z has correctly guessed the word S
-									// delete user and disconnect client
-									// restart game with new word
+									// let all players know correct word was guessed
+									snprintf(msg, MAX_MSG_LENGTH, "%s has correctly guessed the word %s\n", GetUserName(active_users, sockfd), dict.words[word_index]);
+									Writen(active_users[j].clifd, msg, strlen(msg));
+									game_won = true;
 								}
-								
-								// word guess was incorrect
-								snprintf(msg, MAX_MSG_LENGTH, "%s guessed %s: %d letter(s) were correct and %d letter(s) were correctly placed.\n", active_users[i].name, buf, letters_correct, letters_placed);
-								Writen(active_users[j].clifd, msg, strlen(msg));
+								// guess len matches but incorrect
+								else
+								{
+									// word guess was incorrect
+									snprintf(msg, MAX_MSG_LENGTH, "%s guessed %s: %d letter(s) were correct and %d letter(s) were correctly placed.\n", GetUserName(active_users, sockfd), buf, letters_correct, letters_placed);
+									Writen(active_users[j].clifd, msg, strlen(msg));
+								}
 							}
 						}
-						continue;
+
+						if ( game_won )
+						{
+							// delete users and disconnect clients
+							for( j = 0; j < MAX_CONNECTIONS; j++ )
+							{
+								if ( active_users[j].clifd != -1 ) {
+									Close(active_users[j].clifd);
+									DeleteUser(active_users, active_users[j].clifd);
+								}
+							}
+							
+							// reset select() variables
+							maxfd = listenfd;
+							maxi = -1;
+
+							// setup client array for select
+							// -1 indicates available entry
+							for (i = 0; i < FD_SETSIZE; i++) {
+								client[i] = -1;
+							}
+								
+							FD_ZERO(&allset);
+							FD_SET(listenfd, &allset);
+
+							count_clients = 0;
+							
+							// restart game with new word
+							word_index = rand() % dict.size;
+
+							#ifdef DEBUG
+							printf("DEBUG: game won -> new target word: \"%s\"\n\n", dict.words[word_index] );
+							#endif
+						}
+						continue; // get data from next client
 					}
 					
 					bool username_exist = false;
