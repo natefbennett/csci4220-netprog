@@ -32,6 +32,7 @@
 #define MAX_CONNECTIONS 5
 
 int count_users = 0;
+int count_clients = 0;
 
 // structure for relating a name to clifd
 typedef struct {
@@ -157,6 +158,13 @@ int SetupServer( unsigned short port )
     struct sockaddr_in servaddr;
     int listenfd = Socket(AF_INET, SOCK_STREAM, 0);
 
+	#ifdef DEBUG
+	// solves error on binding, already in use
+    int optval = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, 
+            	(const void *)&optval , sizeof(int));
+	#endif
+
 	bzero(&servaddr, sizeof(servaddr));
 	servaddr.sin_family      = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -165,13 +173,6 @@ int SetupServer( unsigned short port )
 	Bind(listenfd, (SA *) &servaddr, sizeof(servaddr));
 
 	Listen(listenfd, LISTENQ);
-
-	#ifdef DEBUG
-	// solves error on binding, already in use
-    int optval = 1;
-    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, 
-            	(const void *)&optval , sizeof(int));
-	#endif
 
     return listenfd;
 }
@@ -267,8 +268,8 @@ int main ( int argc, char *argv[] )
 		printf("DEBUG: new select() call -> nready: %d\n", nready);
 		#endif
 			
-		// accept new client connection
-		if ( FD_ISSET(listenfd, &rset) ) 
+		// accept new client connection if max clients not reached
+		if ( FD_ISSET(listenfd, &rset) && count_clients < MAX_CONNECTIONS ) 
 		{
 			connfd = Accept(listenfd, (SA *) &cliaddr, &clilen);
 
@@ -284,6 +285,7 @@ int main ( int argc, char *argv[] )
 					break;
 				}
 			}
+			count_clients++;
 	
 			if ( i == FD_SETSIZE ) {
 				err_quit("FD_SETSIZE reached, too many clients");
@@ -350,6 +352,7 @@ int main ( int argc, char *argv[] )
 					Close(sockfd);
 					FD_CLR(sockfd, &allset);
 					client[i] = -1;
+					count_clients--;
 
 					#ifdef DEBUG
 					printf("DEBUG: reset client slot -> client[%d]: %d\n", i, client[i]);
@@ -417,10 +420,16 @@ int main ( int argc, char *argv[] )
 						#endif 
 
 						// send message to client, username accepted
+						memset(msg, 0, MAX_MSG_LENGTH);
 						snprintf(msg, MAX_MSG_LENGTH,"Let's start playing, %s\n", buf);
 						Writen(sockfd, msg, strlen(msg));
 
 						AddUser(active_users, sockfd, buf);
+
+						// send game stats to new user
+						memset(msg, 0, MAX_MSG_LENGTH);
+						snprintf(msg, MAX_MSG_LENGTH,"There are %d player(s) playing. The secret word is %lu letter(s).\n", count_users, strlen(dict.words[word_index]));
+						Writen(sockfd, msg, strlen(msg));
 					}
 				}
 				
