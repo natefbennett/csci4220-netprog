@@ -32,6 +32,7 @@
 #define MAX_CONNECTIONS 5
 
 int count_users = 0;
+
 // structure for relating a name to clifd
 typedef struct {
     int    clifd;  // client file descriptor
@@ -48,20 +49,54 @@ typedef struct {
 // called once cli fd is closed
 void DeleteUser( user * active, int clifd )
 {
-	for( int i=0; i<MAX_CONNECTIONS; i++ )
+	for( int i = 0; i < MAX_CONNECTIONS; i++ )
 	{
-		if( active[i].clifd==clifd )
+		if( active[i].clifd == clifd )
 		{
 			#ifdef DEBUG
-			printf("DEBUG: deleting user -> active[%d]: \"%s\"\n", i, active[i].name);
+			printf("DEBUG: deleting user -> active_users[%d]: \"%s\"\n", i, active[i].name);
 			#endif
-			for( int j=i; j<MAX_CONNECTIONS-1;j++ ) {
-				active[j] = active[j-1];
-			}
-			return;
+			
+			memset(active[i].name, 0, MAX_WORD_LENGTH);
+			active[i].clifd = -1;
+			count_users--;
+
+			break;
 		}
 	}
 }
+
+// adds a user to the user array supplied
+void AddUser( user * active, int clifd, char * name )
+{
+	// find first empty slot to put user
+	for( int i = 0; i < MAX_CONNECTIONS; i++ )
+	{
+		if( active[i].clifd == -1 )
+		{
+			strncpy(active[i].name, name, MAX_WORD_LENGTH);
+			active[i].clifd = clifd;
+			count_users++;
+
+			#ifdef DEBUG
+			printf("DEBUG: added new user -> active_users[%d]: \"%s\"\n", count_users-1, name);
+			#endif 
+
+			break;
+		}
+	}
+}
+
+bool ClientIsActiveUser( user * active, int clifd )
+{
+	for( int i = 0; i < MAX_CONNECTIONS; i++ ) {
+		if( active[i].clifd == clifd ) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // garbage collection for dictionary
 void RemoveWords( dictionary * dict )
 {
@@ -328,16 +363,8 @@ int main ( int argc, char *argv[] )
 					printf("DEBUG: reading data from client -> client[%d]: %d\n", i, sockfd);
 					#endif
 
-					bool cli_exists = false;
-
 					// check if client fd already exists in active users
-					for( j = 0; j < MAX_CONNECTIONS; j++ ) 
-					{
-						if( active_users[j].clifd == sockfd ) {
-							cli_exists = true;
-							break;
-						}
-					}
+					bool cli_exists = ClientIsActiveUser( active_users, sockfd );
 
 					#ifdef DEBUG
 					printf("DEBUG: client[%d]: %d in active users: %s\n", i, sockfd, cli_exists ? "TRUE" : "FALSE");
@@ -351,7 +378,10 @@ int main ( int argc, char *argv[] )
 						#ifdef DEBUG
 						printf("DEBUG: user playing game -> active_users[%d]: %s\n", j, active_users[j].name );
 						printf("       data received: \"%s\"\n", buf );
+						printf("       target word:   \"%s\"\n", dict.words[word_index] );
 						#endif
+
+						continue;
 					}
 					
 					bool username_exist = false;
@@ -390,13 +420,7 @@ int main ( int argc, char *argv[] )
 						snprintf(msg, MAX_MSG_LENGTH,"Let's start playing, %s\n", buf);
 						Writen(sockfd, msg, strlen(msg));
 
-						strncpy(active_users[count_users].name, buf, MAX_WORD_LENGTH);
-						active_users[count_users].clifd = sockfd;
-						count_users++;
-
-						#ifdef DEBUG
-						printf("DEBUG: added new user -> active_users[%d]: \"%s\"\n", count_users-1, buf);
-						#endif 
+						AddUser(active_users, sockfd, buf);
 					}
 				}
 				
