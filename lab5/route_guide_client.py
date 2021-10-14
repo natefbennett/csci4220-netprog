@@ -101,15 +101,15 @@ def guide_route_chat(stub):
 
 # method for testing RouteRetrieve responses from server
 def guide_route_retrieve(stub):
-    route0   = stub.RouteRetrieve( route_guide_pb2.RouteID(route_id=0) )
-    route2   = stub.RouteRetrieve( route_guide_pb2.RouteID(route_id=2) )
-    route4   = stub.RouteRetrieve( route_guide_pb2.RouteID(route_id=4) )
-    route999 = stub.RouteRetrieve( route_guide_pb2.RouteID(route_id=999) )
+    random_ids = random.sample(range(0, 1000), 10)
+    for i in range(0,5):
+        route = stub.RouteRetrieve(route_guide_pb2.RouteID(route_id=i))
+        print("routes[{}] = {}".format(i,list(route)))
 
-    print(f'routes[0]  = {list(route0)}')
-    print(f'routes[2]  = {list(route2)}')
-    print(f'routes[4]  = {list(route4)}')
-    print(f'routes[999] = {list(route999)}')
+    for i in range(len(random_ids)):
+        route = stub.RouteRetrieve(route_guide_pb2.RouteID(
+            route_id=random_ids[i]))
+        print("routes[{}] = {}".format(random_ids[i],list(route)))
 
 
 def run():
