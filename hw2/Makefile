@@ -7,7 +7,7 @@ HOST1                 = manjaro
 HOST2                 = insert-hostmane
 
 libunp = $(unpv13d_path_submitty)
-MACROS  = SUBMITTY
+MACROS  = -D SUBMITTY
 
 ifeq ($(HOST1), $(shell hostname))
   libunp = $(unpv13d_path_local_1)
