@@ -177,6 +177,20 @@ int SetupServer( unsigned short port )
     return listenfd;
 }
 
+// game method, find number of correct letters in guess
+int GradeCorrect(char * word_guess, char * word)
+{
+	int letters_correct = 0;
+	return letters_correct;
+}
+
+// game method, find number of correctly placed letters in guess
+int GradePlacement(char * word_guess, char * word)
+{
+	int letters_placed = 0;
+	return letters_placed;
+}
+
 int main ( int argc, char *argv[] )
 {
 	// NOTE: for Submitty (auto-grader) use only
@@ -373,17 +387,43 @@ int main ( int argc, char *argv[] )
 					printf("DEBUG: client[%d]: %d in active users: %s\n", i, sockfd, cli_exists ? "TRUE" : "FALSE");
 					#endif
 					
+					// user playing game
 					if( cli_exists )
 					{
-						//some client sending data
-						//start game
-
 						#ifdef DEBUG
-						printf("DEBUG: user playing game -> active_users[%d]: %s\n", j, active_users[j].name );
+						printf("DEBUG: user playing game -> active_users[%d]: %s\n", i, active_users[i].name );
 						printf("       data received: \"%s\"\n", buf );
 						printf("       target word:   \"%s\"\n", dict.words[word_index] );
 						#endif
 
+						// "Invalid guess length. The secret word is 5 letter(s)."
+						if ( strlen(buf) != strlen(dict.words[word_index]) )
+						{
+							snprintf(msg, MAX_MSG_LENGTH, "Invalid guess length. The secret word is %lu letter(s).\n", strlen(dict.words[word_index]));
+							Writen(sockfd, msg, strlen(msg));
+						}
+
+						int letters_correct = GradeCorrect(buf, dict.words[word_index]);
+						int letters_placed = GradePlacement(buf, dict.words[word_index]);
+
+						// send message to all user with info about guess
+						for( j = 0; j < MAX_CONNECTIONS; j++ )
+						{
+							if( active_users[j].clifd != -1 )
+							{
+								// check if word guess was correct
+								if ( letters_correct == strlen(dict.words[word_index]) )
+								{
+									// print out Z has correctly guessed the word S
+									// delete user and disconnect client
+									// restart game with new word
+								}
+								
+								// word guess was incorrect
+								snprintf(msg, MAX_MSG_LENGTH, "%s guessed %s: %d letter(s) were correct and %d letter(s) were correctly placed.\n", active_users[i].name, buf, letters_correct, letters_placed);
+								Writen(active_users[j].clifd, msg, strlen(msg));
+							}
+						}
 						continue;
 					}
 					
