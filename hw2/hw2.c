@@ -28,13 +28,14 @@
 #endif
 
 #define MAX_WORD_LENGTH 1024
+#define MAX_MSG_LENGTH  2048
 #define MAX_CONNECTIONS 5
 
 int count_users = 0;
 // structure for relating a name to clifd
 typedef struct {
     int    clifd;  // client file descriptor
-    char * name;
+    char   name[MAX_WORD_LENGTH];
 } user;
 
 // structure for storing an array of all words
@@ -160,10 +161,9 @@ int main ( int argc, char *argv[] )
     // networking variables
 	int					i, j, maxi, maxfd, connfd, sockfd, nready;
 	int					client[FD_SETSIZE];
-	ssize_t				n;
+	ssize_t				n;					   // allset stores the original set since select is destructive
 	fd_set				rset, allset;          // rset = ready sockets returned from select
-	char				buf[MAX_WORD_LENGTH];  // allset stores the original set since select is destructive
-	char *              msg;
+	char				buf[MAX_WORD_LENGTH], msg[MAX_MSG_LENGTH];  
 	struct sockaddr_in	cliaddr;
 	socklen_t           clilen = sizeof(cliaddr);
     user                active_users[MAX_CONNECTIONS];
@@ -179,7 +179,7 @@ int main ( int argc, char *argv[] )
 	// initialize active users
 	for ( i = 0; i < MAX_CONNECTIONS; i++)
 	{
-		active_users[i].name = "";
+		memset(active_users[i].name, 0, MAX_WORD_LENGTH);
 		active_users[i].clifd = -1;
 	}
 	
@@ -259,7 +259,7 @@ int main ( int argc, char *argv[] )
 			#endif
 
 			// send welcome message to new client
-			msg = "Welcome to Guess the Word, please enter your username.\n";
+			strcpy(msg, "Welcome to Guess the Word, please enter your username.\n");
 			Writen(connfd, msg, strlen(msg));
 
 			FD_SET(connfd, &allset); // add new descriptor to allset
@@ -350,7 +350,7 @@ int main ( int argc, char *argv[] )
 
 						#ifdef DEBUG
 						printf("DEBUG: user playing game -> active_users[%d]: %s\n", j, active_users[j].name );
-						printf("	   data received: \"%s\"\n", buf );
+						printf("       data received: \"%s\"\n", buf );
 						#endif
 					}
 					
@@ -370,7 +370,7 @@ int main ( int argc, char *argv[] )
 								#endif
 
 								// send message to client, ask for different username
-								sprintf(msg, "Username %s is already taken, please enter a different username\n", buf);
+								snprintf(msg, MAX_MSG_LENGTH, "Username %s is already taken, please enter a different username\n", buf);
 								Writen(sockfd, msg, strlen(msg));
 
 								username_exist = true;
@@ -386,17 +386,16 @@ int main ( int argc, char *argv[] )
 						printf("DEBUG: valid user name -> adding \"%s\" to active_users[%d]\n", buf, count_users);
 						#endif 
 
-						// TODO: fix segfault from line below
 						// send message to client, username accepted
-						sprintf(msg, "Let's start playing, %s\n", buf);
+						snprintf(msg, MAX_MSG_LENGTH,"Let's start playing, %s\n", buf);
 						Writen(sockfd, msg, strlen(msg));
 
-						strcpy(active_users[count_users].name, buf);
+						strncpy(active_users[count_users].name, buf, MAX_WORD_LENGTH);
 						active_users[count_users].clifd = sockfd;
 						count_users++;
 
 						#ifdef DEBUG
-						printf("DEBUG: added new user -> active_users[%d]: \"%s\"\n", count_users, buf);
+						printf("DEBUG: added new user -> active_users[%d]: \"%s\"\n", count_users-1, buf);
 						#endif 
 					}
 				}
