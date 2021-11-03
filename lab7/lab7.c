@@ -5,6 +5,7 @@
 //	Nate Bennett
 // 	Anisha Halwai
 
+
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,7 @@ int main(int argc, const char * argv[]) {
     for (res = result; res != NULL; res = res->ai_next)
     {
 
+        
 		sock = socket(res->ai_family,res->ai_socktype,0);
 		if(sock < 0){
 			perror("ERROR: socket");
@@ -56,14 +58,14 @@ int main(int argc, const char * argv[]) {
 					
 			switch (res->ai_family){
 				case AF_INET:
-					//IPv4
+					ipverstr = "IPv4";
 					
 					struct sockaddr_in *addr;
 					addr = (struct sockaddr_in *)res->ai_addr;
 					printf("%s\n",inet_ntoa((struct in_addr)addr->sin_addr));
 					break;
 				case AF_INET6:
-					//IPv6
+					ipverstr = "IPv6";
 					
 					char buf[INET6_ADDRSTRLEN];
 					struct sockaddr_in6 *in6 = (struct sockaddr_in6*)res->ai_addr;
@@ -78,6 +80,7 @@ int main(int argc, const char * argv[]) {
 
 					break;
 				default:
+					ipverstr = "unknown";
 					break;
 			}
 		}
