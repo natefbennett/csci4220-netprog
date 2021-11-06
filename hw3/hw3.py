@@ -29,13 +29,13 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 # start up simple Kademlia server
 def serve( port ):
-	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	pb2_grpc.add_KadImplServicer_to_server(
-		KadImplServicer(), server)
+	server   = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+	servicer = KadImplServicer()
+	pb2_grpc.add_KadImplServicer_to_server( servicer, server)
 	server.add_insecure_port(f'[::]:{port}')
 	server.start()
 	#server.wait_for_termination()
-	return server
+	return servicer
 
 def run():
 	if len(sys.argv) != 4:
@@ -50,7 +50,7 @@ def run():
 	address  = socket.gethostbyname(hostname) # IP address from this hostname
 
 	# setup server, runs in background
-	server = serve( port )
+	servicer = serve( port )
 
 	''' Use the following code to convert a hostname to an IP and start a channel
 	Note that every stub needs a channel attached to it
@@ -58,11 +58,69 @@ def run():
 	Submitty may kill your program if you have too many file descriptors open
 	at the same time. '''
 	
-	remote_addr = socket.gethostbyname(remote_addr_string)
-	remote_port = int(remote_port_string)
-	channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
+	# remote_addr = socket.gethostbyname(remote_addr_string)
+	# remote_port = int(remote_port_string)
+	# channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
 
 	# read form stdin for commands
+	for line in sys.stdin.readline():
+		line = line.split()
+		cmd  = line.pop(0)
+
+		# command: BOOTSTRAP <remote_hostname> <remote_port>
+		if cmd == 'BOOTSTRAP':
+
+			# validate usage
+			if len(line) != 2:
+				print('Usage: BOOTSTRAP <remote hostname> <remote port>')
+				continue
+
+			remote_hostname, remote_port = line 
+
+		# command: FIND_NODE <node_id>
+		elif cmd == 'FIND_NODE':
+
+			# validate usage
+			if len(line) != 1:
+				print('Usage: FIND_NODE <node_id>')
+				continue
+
+			node_id = line.pop() 
+			
+		# command: FIND_VALUE <key>
+		elif cmd == 'FIND_VALUE':
+
+			# validate usage
+			if len(line) != 1:
+				print('Usage: FIND_VALUE <key>')
+				continue
+
+			key = line.pop() 
+
+		# command: STORE <key> <value>
+		elif cmd == 'STORE':
+
+			# validate usage
+			if len(line) != 2:
+				print('Usage: STORE <key> <value>')
+				continue
+
+			key, value = line
+
+		# command: QUIT
+		elif cmd == 'QUIT':
+			continue
+
+		else:
+			print(
+				'Available Commands:\n'                          + \
+				'\tBOOTSTRAP  <remote_hostname> <remote_port>\n' + \
+				'\tFIND_NODE  <node_id>\n'                       + \
+				'\tFIND_VALUE <key>\n'                           + \
+				'\tSTORE      <key> <value>\n'                   + \
+				'\tQUIT\n'
+			)
+
 	# example below from lab5
 	'''
 	stub = pb2_grpc.RouteGuideStub(channel)
