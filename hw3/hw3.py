@@ -9,7 +9,7 @@ import grpc
 import csci4220_hw3_pb2      as pb2
 import csci4220_hw3_pb2_grpc as pb2_grpc
 
-class SimpleKadServicer(pb2_grpc.SimpleKadServicer):
+class KadImplServicer(pb2_grpc.KadImplServicer):
 	"""Provides methods that implement functionality of a simple Kademlia server."""
 
 	def __init__(self):
@@ -30,11 +30,11 @@ class SimpleKadServicer(pb2_grpc.SimpleKadServicer):
 # start up simple Kademlia server
 def serve( port ):
 	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	pb2_grpc.add_SimpleKadServicer_to_server(
-		SimpleKadServicer(), server)
+	pb2_grpc.add_KadImplServicer_to_server(
+		KadImplServicer(), server)
 	server.add_insecure_port(f'[::]:{port}')
 	server.start()
-	server.wait_for_termination()
+	#server.wait_for_termination()
 	return server
 
 def run():
