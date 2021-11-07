@@ -45,13 +45,11 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 	def PrintKBuckets(self):
 
-		# print oldest to newest
-		k_buckets = reversed(self.k_buckets)
-
 		# loop through each k bucket and print its nodes
-		for i, k_bucket in enumerate(k_buckets):
+		# print oldest to newest
+		for i, k_bucket in enumerate(self.k_buckets):
 			line = f'{i}:'
-			for node in k_bucket:
+			for node in reversed(k_bucket):
 				line += f' {node.id}:{node.port}'
 
 			print(line)
@@ -94,12 +92,22 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 	# RPC: Quit(IDKey) returns (IDKey)
 	def Quit(self, request, context):
-		# If a node receives a call to Quit from <remoteID>, and the remote node is in k-bucket , the entry should be
-		# removed from the k-bucket and the following printed:
-		# print('Evicting quitting node <remoteID> from bucket <i>')
-		# Otherwise the node should print the following:
-		# print('No record of quitting node <remoteID> in k-buckets.')
-		pass
+
+		for i, k_bucket in enumerate(self.k_buckets):
+			# check k buckets for requested node
+			if request.node in k_bucket:
+				
+				print(f'Evicting quitting node {request.node.id} from bucket {i}')
+				k_bucket.remove(request.node)
+				
+				return pb2.IDKey(
+					node  = self.node,
+					idkey = request.node.id
+				)
+		
+		# node not found
+		print(f'No record of quitting node {request.node.id} in k-buckets.')
+		return None
 
 
 # start up simple Kademlia server
@@ -239,9 +247,22 @@ def run():
 
 		# command: QUIT
 		elif cmd == 'QUIT':
-			print('Letting <remoteID> know I\'m quitting.')
+
 			# send a Quit RPC to each node that is in its k-buckets
-			print('Shut down node <ID>')
+			for k_bucket in reversed(servicer.k_buckets):
+				for node in reversed(k_bucket):
+					
+					# let stored node know that this node is quitting
+					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
+							stub = pb2_grpc.KadImplStub(channel)
+
+							print(f'Letting {str(node.id)} know I\'m quitting.')
+							stub.Quit( pb2.IDKey(
+								node  = servicer.node,
+								idkey = servicer.node.id
+							))
+
+			print(f'Shut down node {local_id}')
 			break
 
 		# command not supported
