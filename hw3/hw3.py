@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+# Author(s): Nate Bennett, Anisha Halwai
+# Date:      11/09/21
+# File:      hw3.py
+#
+# Assignment 3: SimpleKad DHT Implementation
+#
+# CSCI 4220: Network Programming
+# Professor Jasmine Plum
+
 from concurrent import futures
 import sys  # For sys.argv, sys.exit()
 import socket  # for gethostbyname()
@@ -14,27 +23,67 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 	def __init__(self):
 		pass
-
+	
+	# RPC
 	def FindNode(self):
-		pass
-
-	def FindValue(self):
+		# return the k closest nodes to the provided ID
+		# may need to look in several k-buckets
+		# update k-buckets by adding the requester’s ID to be the most recently used
+		print('Serving FindNode(<targetID>) request for <requesterID>')
 		pass
 	
+	# RPC
+	def FindValue(self):
+		# If the remote node has not been told to store the key, 
+		# it will reply with the k closest nodes to the key.
+
+		# If the remote node has been told to store the key 
+		# before it responds with the key and the associated value.
+
+		print('Serving FindKey(<key>) request for <requesterID>')
+		pass
+	
+	# RPC
 	def Store(self):
+		# node receiving the call should 
+		# locally store the key/value pair. It should also update 
+		# its own k-buckets by adding/updating the requester’s ID 
+		# to be the most recently used
+		print('Storing key <key> value "<value>"')
 		pass
 
+	# RPC
 	def Quit(self):
+		# If a node receives a call to Quit from <remoteID>, and the remote node is in k-bucket , the entry should be
+		# removed from the k-bucket and the following printed:
+		# print('Evicting quitting node <remoteID> from bucket <i>')
+		# Otherwise the node should print the following:
+		# print('No record of quitting node <remoteID> in k-buckets.')
 		pass
+
+def PrintKBuckets():
+	# When printing k-buckets use the following format for i=[0,N) where N is the number of bits in the IDs:
+	# <i> [<oldest entry> <next oldest entry> ... <newest entry>]<newline>
+	# where an entry is in the form
+	# <ID>:<port>
+	# -- example --
+	# After BOOTSTRAP(1), k-buckets are:
+	# 0: 1:9001
+	# 1:
+	# 2:
+	# 3:
+	pass
 
 # start up simple Kademlia server
-def serve( port ):
+def Serve( port ):
 	server   = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 	servicer = KadImplServicer()
+
 	pb2_grpc.add_KadImplServicer_to_server( servicer, server)
 	server.add_insecure_port(f'[::]:{port}')
 	server.start()
 	#server.wait_for_termination()
+
 	return servicer
 
 def run():
@@ -50,7 +99,7 @@ def run():
 	address  = socket.gethostbyname(hostname) # IP address from this hostname
 
 	# setup server, runs in background
-	servicer = serve( port )
+	servicer = Serve( port )
 
 	''' Use the following code to convert a hostname to an IP and start a channel
 	Note that every stub needs a channel attached to it
@@ -63,10 +112,10 @@ def run():
 	# channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
 
 	# read form stdin for commands
-	for line in sys.stdin.readline():
+	for line in sys.stdin:
 		line = line.split()
 		cmd  = line.pop(0)
-
+		
 		# command: BOOTSTRAP <remote_hostname> <remote_port>
 		if cmd == 'BOOTSTRAP':
 
@@ -75,7 +124,14 @@ def run():
 				print('Usage: BOOTSTRAP <remote hostname> <remote port>')
 				continue
 
-			remote_hostname, remote_port = line 
+			remote_hostname, remote_port = line
+
+			# TODO: send remote node a FindNode RPC using local node_id
+			
+			print('After BOOTSTRAP(<remoteID>), k-buckets are:')
+			PrintKBuckets() # TODO: make PrintKBuckets() method
+
+			# TODO: add nodes to k-buckets
 
 		# command: FIND_NODE <node_id>
 		elif cmd == 'FIND_NODE':
@@ -85,7 +141,33 @@ def run():
 				print('Usage: FIND_NODE <node_id>')
 				continue
 
-			node_id = line.pop() 
+			node_id = line.pop()
+
+			print('Before FIND_NODE command, k-buckets are:')
+			PrintKBuckets() # TODO: make PrintKBuckets() method
+			
+			# skip to output if local node_id matches requested node_id
+			# ( acts as if it found a node )
+			if node_id != servicer.node_id:
+				pass
+			#   - Search Algorithm -
+			#	While some of the k closest nodes to <nodeID> have not been asked:
+			#		S = the k closest IDs to <nodeID>
+			#		S' = nodes in S that have not been contacted yet
+			#		For node in S':
+			#			R = node.FindNode(<nodeID>)
+			#			
+			# 			# Always mark node as most recently used
+			#			Update k-buckets with node
+			#			
+			# 			# If a node in R was already in a k-bucket, its position does not change.
+			#			# If it was not in the bucket yet, then it is added as the most recently used in that bucket.
+			#			# This _may_ kick out the node from above.
+			#			Update k-buckets with all nodes in R
+			#		If <nodeID> has been found, stop
+
+			print('Serving FindNode(<targetID>) request for <requesterID>')
+			PrintKBuckets()
 			
 		# command: FIND_VALUE <key>
 		elif cmd == 'FIND_VALUE':
@@ -97,6 +179,20 @@ def run():
 
 			key = line.pop() 
 
+			print('Before FIND_VALUE command, k-buckets are:')
+			PrintKBuckets()
+
+			# If the target key was found at another node, the program should then print:
+			# Found value "<value>" for key <key>
+			# If the target key was already stored on the current node, the program should instead print:
+			# Found data "<value>" for key <key>
+			# Otherwise the program should print:
+			# Could not find key <key>
+
+
+			print('After FIND_VALUE command, k-buckets are:')
+			PrintKBuckets()
+
 		# command: STORE <key> <value>
 		elif cmd == 'STORE':
 
@@ -107,10 +203,18 @@ def run():
 
 			key, value = line
 
+			# The node should send a Store RPC to the single node that has ID closest to the key
+			# the current node may be the closest node and may need to store the key/value pair locally
+			print('Storing key <key> at node <remoteID>')
+
 		# command: QUIT
 		elif cmd == 'QUIT':
-			continue
+			print('Letting <remoteID> know I\'m quitting.')
+			# send a Quit RPC to each node that is in its k-buckets
+			print('Shut down node <ID>')
+			break
 
+		# command not supported
 		else:
 			print(
 				'Available Commands:\n'                          + \
@@ -121,21 +225,18 @@ def run():
 				'\tQUIT\n'
 			)
 
-	# example below from lab5
-	'''
-	stub = pb2_grpc.RouteGuideStub(channel)
-	print("-------------- GetFeature --------------")
-	guide_get_feature(stub)
-	print("-------------- ListFeatures --------------")
-	guide_list_features(stub)
-	print("-------------- RecordRoute --------------")
-	guide_record_route(stub)
-	print("-------------- RouteChat --------------")
-	guide_route_chat(stub)
-	print("-------------- RouteRetrieve --------------")
-	guide_route_retrieve(stub) # run tests on RouteRetrieve
-	'''
-
+	# example below from lab5-
+	# stub = pb2_grpc.RouteGuideStub(channel)
+	# print("-------------- GetFeature --------------")
+	# guide_get_feature(stub)
+	# print("-------------- ListFeatures --------------")
+	# guide_list_features(stub)
+	# print("-------------- RecordRoute --------------")
+	# guide_record_route(stub)
+	# print("-------------- RouteChat --------------")
+	# guide_route_chat(stub)
+	# print("-------------- RouteRetrieve --------------")
+	# guide_route_retrieve(stub) # run tests on RouteRetrieve
 
 if __name__ == '__main__':
 	run()
