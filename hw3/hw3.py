@@ -67,7 +67,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# return the k closest nodes to the provided ID
 		# may need to look in several k-buckets
 		# update k-buckets by adding the requester’s ID to be the most recently used
-		print('Serving FindNode(<targetID>) request for <requesterID>')
+		print(f'Serving FindNode({request.idkey}) request for {request.node.id}')
 		pass
 	
 	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
@@ -78,17 +78,22 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# If the remote node has been told to store the key 
 		# before it responds with the key and the associated value.
 
-		print('Serving FindKey(<key>) request for <requesterID>')
-		pass
+		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
 	
 	# RPC: Store(KeyValue) returns (IDKey)
+	# warining: does not check for collisions
 	def Store(self, request, context):
-		# node receiving the call should 
-		# locally store the key/value pair. It should also update 
-		# its own k-buckets by adding/updating the requester’s ID 
-		# to be the most recently used
-		print('Storing key <key> value "<value>"')
-		pass
+
+		print(f'Storing key {request.key} value "{request.value}"')
+		self.hash_table[request.key] = request.value
+
+		# TODO: update k_buckets, add requester's ID to be most recently used
+
+		# returns the node that the key value pair was stored and the key
+		return pb2.IDKey(
+			node  = self.node,
+			idkey = request.key 
+		)
 
 	# RPC: Quit(IDKey) returns (IDKey)
 	def Quit(self, request, context):
@@ -239,11 +244,11 @@ def run():
 				print('Usage: STORE <key> <value>')
 				continue
 
-			key, value = line
+			int(key), value = line
 
 			# The node should send a Store RPC to the single node that has ID closest to the key
 			# the current node may be the closest node and may need to store the key/value pair locally
-			print('Storing key <key> at node <remoteID>')
+			print(f'Storing key {key} at node <remoteID>')
 
 		# command: QUIT
 		elif cmd == 'QUIT':
@@ -275,19 +280,6 @@ def run():
 				'\tSTORE      <key> <value>\n'                   + \
 				'\tQUIT\n'
 			)
-
-	# example below from lab5-
-	# stub = pb2_grpc.RouteGuideStub(channel)
-	# print("-------------- GetFeature --------------")
-	# guide_get_feature(stub)
-	# print("-------------- ListFeatures --------------")
-	# guide_list_features(stub)
-	# print("-------------- RecordRoute --------------")
-	# guide_record_route(stub)
-	# print("-------------- RouteChat --------------")
-	# guide_route_chat(stub)
-	# print("-------------- RouteRetrieve --------------")
-	# guide_route_retrieve(stub) # run tests on RouteRetrieve
 
 if __name__ == '__main__':
 	run()
