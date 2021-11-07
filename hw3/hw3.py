@@ -21,19 +21,59 @@ import csci4220_hw3_pb2_grpc as pb2_grpc
 class KadImplServicer(pb2_grpc.KadImplServicer):
 	"""Provides methods that implement functionality of a simple Kademlia server."""
 
-	def __init__(self):
+	# Member Variables
+	n = -1
+	k = -1
+	node = None  # this servers node info
+	k_buckets  = []
+	hash_table = dict()
+
+	def __init__(self, n, k, id, addr, port):
+
+		# initialize k buckets
+		self.k = k
+		self.n = n
+		for i in range(n):
+			self.k_buckets.append([])
+
+		# setup this servers node
+		self.node = pb2.Node(
+			id      = id,
+			port    = int(port),
+			address = addr
+		)
+
+	def PrintKBuckets(self):
+
+		# print oldest to newest
+		k_buckets = reversed(self.k_buckets)
+
+		# loop through each k bucket and print its nodes
+		for i, k_bucket in enumerate(k_buckets):
+			line = f'{i}:'
+			for node in k_bucket:
+				line += f' {node.id}:{node.port}'
+
+			print(line)
+
+	# adds the provided node to a k bucket 
+	def AddNode(self, node):
 		pass
-	
-	# RPC
-	def FindNode(self):
+
+	# ------------------------------------------- #
+	#  Remote Procedure Call (RPC) Methods Below  #
+	# ------------------------------------------- #
+		
+	# RPC: FindNode(IDKey) returns (NodeList)
+	def FindNode(self, request, context):
 		# return the k closest nodes to the provided ID
 		# may need to look in several k-buckets
 		# update k-buckets by adding the requester’s ID to be the most recently used
 		print('Serving FindNode(<targetID>) request for <requesterID>')
 		pass
 	
-	# RPC
-	def FindValue(self):
+	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
+	def FindValue(self, request, context):
 		# If the remote node has not been told to store the key, 
 		# it will reply with the k closest nodes to the key.
 
@@ -43,8 +83,8 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		print('Serving FindKey(<key>) request for <requesterID>')
 		pass
 	
-	# RPC
-	def Store(self):
+	# RPC: Store(KeyValue) returns (IDKey)
+	def Store(self, request, context):
 		# node receiving the call should 
 		# locally store the key/value pair. It should also update 
 		# its own k-buckets by adding/updating the requester’s ID 
@@ -52,8 +92,8 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		print('Storing key <key> value "<value>"')
 		pass
 
-	# RPC
-	def Quit(self):
+	# RPC: Quit(IDKey) returns (IDKey)
+	def Quit(self, request, context):
 		# If a node receives a call to Quit from <remoteID>, and the remote node is in k-bucket , the entry should be
 		# removed from the k-bucket and the following printed:
 		# print('Evicting quitting node <remoteID> from bucket <i>')
@@ -61,23 +101,14 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# print('No record of quitting node <remoteID> in k-buckets.')
 		pass
 
-def PrintKBuckets():
-	# When printing k-buckets use the following format for i=[0,N) where N is the number of bits in the IDs:
-	# <i> [<oldest entry> <next oldest entry> ... <newest entry>]<newline>
-	# where an entry is in the form
-	# <ID>:<port>
-	# -- example --
-	# After BOOTSTRAP(1), k-buckets are:
-	# 0: 1:9001
-	# 1:
-	# 2:
-	# 3:
-	pass
 
 # start up simple Kademlia server
-def Serve( port ):
+def Serve( port, n, k, id ):
+	hostname = socket.gethostname() # gets this machine's host name
+	ip_addr  = socket.gethostbyname(hostname) # IP address from this hostname
+
 	server   = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	servicer = KadImplServicer()
+	servicer = KadImplServicer(n, k, id, ip_addr, port)
 
 	pb2_grpc.add_KadImplServicer_to_server( servicer, server)
 	server.add_insecure_port(f'[::]:{port}')
@@ -95,11 +126,10 @@ def run():
 	port     = str(int(sys.argv[2])) # add_insecure_port() will want a string
 	k        = int(sys.argv[3])
 	n        = 4
-	hostname = socket.gethostname() # gets this machine's host name
-	address  = socket.gethostbyname(hostname) # IP address from this hostname
 
 	# setup server, runs in background
-	servicer = Serve( port )
+	# returns an instance of KadImplServicer
+	servicer = Serve( port, n, k, local_id )
 
 	''' Use the following code to convert a hostname to an IP and start a channel
 	Note that every stub needs a channel attached to it
@@ -129,7 +159,7 @@ def run():
 			# TODO: send remote node a FindNode RPC using local node_id
 			
 			print('After BOOTSTRAP(<remoteID>), k-buckets are:')
-			PrintKBuckets() # TODO: make PrintKBuckets() method
+			servicer.PrintKBuckets() # TODO: make PrintKBuckets() method
 
 			# TODO: add nodes to k-buckets
 
@@ -144,7 +174,7 @@ def run():
 			node_id = line.pop()
 
 			print('Before FIND_NODE command, k-buckets are:')
-			PrintKBuckets() # TODO: make PrintKBuckets() method
+			servicer.PrintKBuckets() # TODO: make PrintKBuckets() method
 			
 			# skip to output if local node_id matches requested node_id
 			# ( acts as if it found a node )
@@ -167,7 +197,7 @@ def run():
 			#		If <nodeID> has been found, stop
 
 			print('Serving FindNode(<targetID>) request for <requesterID>')
-			PrintKBuckets()
+			servicer.PrintKBuckets()
 			
 		# command: FIND_VALUE <key>
 		elif cmd == 'FIND_VALUE':
@@ -180,7 +210,7 @@ def run():
 			key = line.pop() 
 
 			print('Before FIND_VALUE command, k-buckets are:')
-			PrintKBuckets()
+			servicer.PrintKBuckets()
 
 			# If the target key was found at another node, the program should then print:
 			# Found value "<value>" for key <key>
@@ -191,7 +221,7 @@ def run():
 
 
 			print('After FIND_VALUE command, k-buckets are:')
-			PrintKBuckets()
+			servicer.PrintKBuckets()
 
 		# command: STORE <key> <value>
 		elif cmd == 'STORE':
