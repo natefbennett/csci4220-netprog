@@ -115,10 +115,11 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 	def Get_k_closest(self,request):
 		allNodes_with_distance = [] #[ <dist, node>, <dist,Node2> ...]
-		for n in self.k_buckets:
-			dist = n.Distance(request)
-			dist_node = (dist,n)
-			allNodes_with_distance.append(dist_node)
+		for buckets in self.k_buckets:
+			for n in buckets:
+				dist = n.Distance(request)
+				dist_node = (dist,n)
+				allNodes_with_distance.append(dist_node)
 
 		allNodes_with_distance.sort()
 		if len(allNodes_with_distance)>=self.k:
