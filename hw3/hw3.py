@@ -131,67 +131,13 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	#  Remote Procedure Call (RPC) Methods Below  #
 	# ------------------------------------------- #
 
-	def FindNode_helper(self,original, new_request,contactedNodes, firstk):
-
-		# TODO: need to figure out when to return
-		# while True:
-
-		S = self.Get_k_closest(new_request) #returns[<dist,node>,<dist,node>..]
-		# create S' = nodes in S that have not been contacted yet
-		S_ = []
-		for dist_nod in S:
-			firstk.append(dist_nod) #append all possible closest nodes to a list
-
-			#if <node id> -- original node reached by algorithm, stop loop
-			if dist_nod[1]==original:
-				firstk.sort()
-				if len(firstk)>=self.k:
-					return firstk[:self.k]
-				else: return firstk
-
-			if dist_nod[1] not in contactedNodes:
-				contactedNodes.add(dist_nod[1])
-				S_.append(dist_nod[1])
-
-		for nod in S_:
-			k_closest_list = nod.FindNode_helper(original,nod,
-												 contactedNodes,firstk)
-			self.makeNodeMostRecent(nod[1]) #most recently used node
-			for new_node in k_closest_list:
-				# if node not in k-bucket, it is made most recently used
-				if self.SearchBucket(new_node)==False:
-					self.makeNodeMostRecent(new_node)
-
 
 	# RPC: FindNode(IDKey) returns (NodeList)
 	def FindNode(self, request, context):
 		# return the k closest nodes to the provided ID
 		# may need to look in several k-buckets
 
-		# no search made
-		if self.node == request.node: return
-
-		# Node lookup algorithm:
-		"""
-		* while k closest not found:
-		*   S = all nodes in node.k-bucket that are closest to node id
-		*   new_S = nodes in S that havent been contacted yet ???
-		*           (maybe keep a list of nodes that have already been visited)
-		*   for node in new_S:
-		*       closest_nodes = node.FindNode(<node id>)
-		*        update node to be the most recently used node
-		*                           (call makeNodeMostRecent)
-		*
-		*       Check if node from closest_nodes exists in k-bucket
-		*       for rec_node in closest_nodes:
-		*           if rec_node in k-bucket: do nothing (dont change position)
-		*           else: add in appropriate k bucket as most recently used 
-		*       
-		*       from pseudo code: Update k-buckets with all nodes in R
-		*       can only hold k entries in a bucket 
-		"""
-
-		kClosestNodes = self.FindNode_helper(request,request,set(),[])
+		kClosestNodes = self.Get_k_closest(request)
 
 		print(
 			f'Serving FindNode({request.idkey}) request for {request.node.id}')
@@ -354,6 +300,38 @@ def run():
 			#			Update k-buckets with all nodes in R
 			#		If <nodeID> has been found, stop
 
+			            # with grpc.insecure_channel(f'{}:{}') as channel:
+			firsk = list()
+			contactedNodes = set()
+
+			# TODO: While some of the k closest nodes to <nodeID> have not been asked:
+			while True:
+				S = servicer.FindNode(node_id)
+				S_ = []
+				for dist_nod in S:
+					firstk.append(dist_nod)
+
+				#if original node found, break
+				if dist_nod[1] == node_id:
+					print(f'Found destination id {node_id}')
+					break
+				if dist_nod[1] not in contactedNodes:
+					contactedNodes.add(dist_nod[1])
+					S_.append(dist_nod[1])
+
+				for node in S_:
+					k_closest_list = node.FindNode(node_id)
+					servicer.makeNodeMostRecent(nod[1])
+
+				for new_node in k_closest_list:
+					if servicer.SearchBucket(new_node) == False:
+					servicer.makeNodeMostRecent(new_node)
+
+			firstk.sort()
+			if len(firstk) >= servicer.k:
+				firstk = firstk[:servicer.k]
+
+			closest_k = [x[1] for x in firstk] #returns only closest nodes
 			print('Serving FindNode(<targetID>) request for <requesterID>')
 			servicer.PrintKBuckets()
 
