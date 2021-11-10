@@ -20,395 +20,410 @@ import csci4220_hw3_pb2_grpc as pb2_grpc
 
 
 class KadImplServicer(pb2_grpc.KadImplServicer):
-    """Provides methods that implement functionality of a simple Kademlia server."""
+	"""Provides methods that implement functionality of a simple Kademlia server."""
 
-    # Member Variables
-    n = -1
-    k = -1
-    node = None  # this servers node info
-    k_buckets = []
-    hash_table = dict()
+	# Member Variables
+	n = -1
+	k = -1
+	node = None  # this servers node info
+	k_buckets = []
+	hash_table = dict()
 
-    def __init__(self, n, k, id, addr, port):
+	def __init__(self, n, k, id, addr, port):
 
-        # initialize k buckets
-        self.k = k
-        self.n = n
-        for i in range(n):
-            self.k_buckets.append([])
+		# initialize k buckets
+		self.k = k
+		self.n = n
+		for i in range(n):
+			self.k_buckets.append([])
 
-        # setup this servers node
-        self.node = pb2.Node(
-            id=id,
-            port=int(port),
-            address=addr
-        )
+		# setup this servers node
+		self.node = pb2.Node(
+			id=id,
+			port=int(port),
+			address=addr
+		)
 
-    def PrintKBuckets(self):
+	def PrintKBuckets(self):
 
-        # loop through each k bucket and print its nodes
-        # print oldest to newest
-        for i, k_bucket in enumerate(self.k_buckets):
-            line = f'{i}:'
-            for node in reversed(k_bucket):
-                line += f' {node.id}:{node.port}'
+		# loop through each k bucket and print its nodes
+		# print oldest to newest
+		for i, k_bucket in enumerate(self.k_buckets):
+			line = f'{i}:'
+			for node in reversed(k_bucket):
+				line += f' {node.id}:{node.port}'
 
-            print(line)
+			print(line)
 
-    def Distance(self, node):
-        return self.node.id ^ node.id
+	def Distance(self, node):
+		return self.node.id ^ node.id
 
-    # adds the provided node to a k bucket
-    def AddNode(self, node):
-        #only add k entries in a bucket
-        dist = self.Distance(node)
+	# adds the provided node to a k bucket
+	def AddNode(self, node):
+		#only add k entries in a bucket
+		dist = self.Distance(node)
 
-        # check [i,N) k-buckets
-        for i in range(self.n):
-            lowerbound = 2**i
-            upperbound = 2**(i+1)
-            if lowerbound<dist and dist<=upperbound:
-                self.k_buckets[i].append(node)
-                if len(self.k_buckets[i])>self.k:
-                    self.k_buckets[i].pop(0)
-                return 0
+		# check [i,N) k-buckets
+		for i in range(self.n):
+			lowerbound = 2 ** i
+			upperbound = 2 ** (i+1)
+			if lowerbound < dist and dist <= upperbound:
+				self.k_buckets[i].append(node)
+				if len(self.k_buckets[i]) > self.k:
+					self.k_buckets[i].pop(0)
+				return True
 
-        #Error handling: failure to add node to a k-bucket
-        return -1
+		# Error handling: failure to add node to a k-bucket
+		return False
 
-    def DeleteNode(self,node):
-        dist = self.Distance(node)
+	def DeleteNode(self,node):
+		dist = self.Distance(node)
 
-        # check [i,N) k-buckets
-        for i in range(self.n):
-            lowerbound = 2 ** i
-            upperbound = 2 ** (i + 1)
-            if lowerbound < dist and dist <= upperbound:
-                index = self.k_buckets[i].index(node)
-                deletedNode = self.k_buckets[i].pop(index)
+		# check [i,N) k-buckets
+		for i in range(self.n):
+			lowerbound = 2 ** i
+			upperbound = 2 ** (i + 1)
+			if lowerbound < dist and dist <= upperbound:
+				index = self.k_buckets[i].index(node)
+				deleted_node = self.k_buckets[i].pop(index)
 
-                # Error handling: if deleted node is not the node given
-                if deletedNode != node:
-                    print('Error: DeleteNode() removed the wrong node!')
-                    return False
+				# Error handling: if deleted node is not the node given
+				if deleted_node != node:
+					print('Error: DeleteNode() removed the wrong node!')
+					return False
 
-                return True
+				return True
 
-        # Error handling: failure to delete node to a k-bucket
-        return False
+		# Error handling: failure to delete node to a k-bucket
+		return False
 
-    def makeNodeMostRecent(self,node):
-        """
-        update k-buckets by adding the requester’s ID to be the most recently used
-        remove node id from i'th k-bucket, appending node id again(change
-        position to be last/most recently used node id)
-        [<older entry>, <next oldest>, ... ,<newest entry>]
-        """
-        self.DeleteNode(node)
-        self.AddNode(node)
+	def makeNodeMostRecent(self,node):
+		"""
+		update k-buckets by adding the requester’s ID to be the most recently used
+		remove node id from i'th k-bucket, appending node id again(change
+		position to be last/most recently used node id)
+		[<older entry>, <next oldest>, ... ,<newest entry>]
+		"""
+		self.DeleteNode(node)
+		self.AddNode(node)
 
-    def SearchBucket(self,node):
-        for n in self.k_buckets:
-            if n==node: return True
+	def SearchBucket(self,node):
+		for n in self.k_buckets:
+			if n==node: return True
 
-        return False
+		return False
 
-    def Get_k_closest(self,request):
-        allNodes_with_distance = [] #[ <dist, node>, <dist,Node2> ...]
-        for n in self.k_buckets:
-            dist = n.Distance(request)
-            dist_node = (dist,n)
-            allNodes_with_distance.append(dist_node)
+	def Get_k_closest(self,request):
+		allNodes_with_distance = [] #[ <dist, node>, <dist,Node2> ...]
+		for n in self.k_buckets:
+			dist = n.Distance(request)
+			dist_node = (dist,n)
+			allNodes_with_distance.append(dist_node)
 
-        allNodes_with_distance.sort()
-        if len(allNodes_with_distance)>=self.k:
-            return allNodes_with_distance[:self.k]
-        else:
-            return allNodes_with_distance
+		allNodes_with_distance.sort()
+		if len(allNodes_with_distance)>=self.k:
+			return allNodes_with_distance[:self.k]
+		else:
+			return allNodes_with_distance
 
-    # ------------------------------------------- #
-    #  Remote Procedure Call (RPC) Methods Below  #
-    # ------------------------------------------- #
+	# ------------------------------------------- #
+	#  Remote Procedure Call (RPC) Methods Below  #
+	# ------------------------------------------- #
 
-    def FindNode_helper(self,original, new_request,contactedNodes, firstk):
+	def FindNode_helper(self,original, new_request,contactedNodes, firstk):
 
-        # TODO: need to figure out when to return
-        # while True:
+		# TODO: need to figure out when to return
+		# while True:
 
-        S = self.Get_k_closest(new_request) #returns[<dist,node>,<dist,node>..]
-        # create S' = nodes in S that have not been contacted yet
-        S_ = []
-        for dist_nod in S:
-            firstk.append(dist_nod) #append all possible closest nodes to a list
+		S = self.Get_k_closest(new_request) #returns[<dist,node>,<dist,node>..]
+		# create S' = nodes in S that have not been contacted yet
+		S_ = []
+		for dist_nod in S:
+			firstk.append(dist_nod) #append all possible closest nodes to a list
 
-            #if <node id> -- original node reached by algorithm, stop loop
-            if dist_nod[1]==original:
-                firstk.sort()
-                if len(firstk)>=self.k:
-                    return firstk[:self.k]
-                else: return firstk
+			#if <node id> -- original node reached by algorithm, stop loop
+			if dist_nod[1]==original:
+				firstk.sort()
+				if len(firstk)>=self.k:
+					return firstk[:self.k]
+				else: return firstk
 
-            if dist_nod[1] not in contactedNodes:
-                contactedNodes.add(dist_nod[1])
-                S_.append(dist_nod[1])
+			if dist_nod[1] not in contactedNodes:
+				contactedNodes.add(dist_nod[1])
+				S_.append(dist_nod[1])
 
-        for nod in S_:
-            k_closest_list = nod.FindNode_helper(original,nod,
-                                                 contactedNodes,firstk)
-            self.makeNodeMostRecent(nod[1]) #most recently used node
-            for new_node in k_closest_list:
-                # if node not in k-bucket, it is made most recently used
-                if self.SearchBucket(new_node)==False:
-                    self.makeNodeMostRecent(new_node)
+		for nod in S_:
+			k_closest_list = nod.FindNode_helper(original,nod,
+												 contactedNodes,firstk)
+			self.makeNodeMostRecent(nod[1]) #most recently used node
+			for new_node in k_closest_list:
+				# if node not in k-bucket, it is made most recently used
+				if self.SearchBucket(new_node)==False:
+					self.makeNodeMostRecent(new_node)
 
 
-    # RPC: FindNode(IDKey) returns (NodeList)
-    def FindNode(self, request, context):
-        # return the k closest nodes to the provided ID
-        # may need to look in several k-buckets
+	# RPC: FindNode(IDKey) returns (NodeList)
+	def FindNode(self, request, context):
+		# return the k closest nodes to the provided ID
+		# may need to look in several k-buckets
 
-        # no search made
-        if self.node == request.node: return
+		# no search made
+		if self.node == request.node: return
 
-        # Node lookup algorithm:
-        """
-        * while k closest not found:
-        *   S = all nodes in node.k-bucket that are closest to node id
-        *   new_S = nodes in S that havent been contacted yet ???
-        *           (maybe keep a list of nodes that have already been visited)
-        *   for node in new_S:
-        *       closest_nodes = node.FindNode(<node id>)
-        *        update node to be the most recently used node
-        *                           (call makeNodeMostRecent)
-        *
-        *       Check if node from closest_nodes exists in k-bucket
-        *       for rec_node in closest_nodes:
-        *           if rec_node in k-bucket: do nothing (dont change position)
-        *           else: add in appropriate k bucket as most recently used 
-        *       
-        *       from pseudo code: Update k-buckets with all nodes in R
-        *       can only hold k entries in a bucket 
-        """
+		# Node lookup algorithm:
+		"""
+		* while k closest not found:
+		*   S = all nodes in node.k-bucket that are closest to node id
+		*   new_S = nodes in S that havent been contacted yet ???
+		*           (maybe keep a list of nodes that have already been visited)
+		*   for node in new_S:
+		*       closest_nodes = node.FindNode(<node id>)
+		*        update node to be the most recently used node
+		*                           (call makeNodeMostRecent)
+		*
+		*       Check if node from closest_nodes exists in k-bucket
+		*       for rec_node in closest_nodes:
+		*           if rec_node in k-bucket: do nothing (dont change position)
+		*           else: add in appropriate k bucket as most recently used 
+		*       
+		*       from pseudo code: Update k-buckets with all nodes in R
+		*       can only hold k entries in a bucket 
+		"""
 
-        kClosestNodes = self.FindNode_helper(request,request,set(),[])
+		kClosestNodes = self.FindNode_helper(request,request,set(),[])
 
-        print(
-            f'Serving FindNode({request.idkey}) request for {request.node.id}')
-        pass
+		print(
+			f'Serving FindNode({request.idkey}) request for {request.node.id}')
+		pass
 
-    # RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
-    def FindValue(self, request, context):
-        # If the remote node has not been told to store the key,
-        # it will reply with the k closest nodes to the key.
+	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
+	def FindValue(self, request, context):
+		# If the remote node has not been told to store the key,
+		# it will reply with the k closest nodes to the key.
 
-        # If the remote node has been told to store the key
-        # before it responds with the key and the associated value.
+		# If the remote node has been told to store the key
+		# before it responds with the key and the associated value.
 
-        print(
-            f'Serving FindKey({request.idkey}) request for {request.node.id}')
+		print(
+			f'Serving FindKey({request.idkey}) request for {request.node.id}')
 
-    # RPC: Store(KeyValue) returns (IDKey)
-    # warining: does not check for collisions
-    def Store(self, request, context):
+	# RPC: Store(KeyValue) returns (IDKey)
+	# warining: does not check for collisions
+	def Store(self, request, context):
 
-        print(f'Storing key {request.key} value "{request.value}"')
-        self.hash_table[request.key] = request.value
+		print(f'Storing key {request.key} value "{request.value}"')
+		self.hash_table[request.key] = request.value
 
-        # TODO: update k_buckets, add requester's ID to be most recently used
+		# TODO: update k_buckets, add requester's ID to be most recently used
 
-        # returns the node that the key value pair was stored and the key
-        return pb2.IDKey(
-            node=self.node,
-            idkey=request.key
-        )
+		# returns the node that the key value pair was stored and the key
+		return pb2.IDKey(
+			node=self.node,
+			idkey=request.key
+		)
 
-    # RPC: Quit(IDKey) returns (IDKey)
-    def Quit(self, request, context):
+	# RPC: Quit(IDKey) returns (IDKey)
+	def Quit(self, request, context):
 
-        for i, k_bucket in enumerate(self.k_buckets):
-            # check k buckets for requested node
-            if request.node in k_bucket:
-                print(
-                    f'Evicting quitting node {request.node.id} from bucket {i}')
-                k_bucket.remove(request.node)
+		for i, k_bucket in enumerate(self.k_buckets):
+			# check k buckets for requested node
+			if request.node in k_bucket:
+				print(
+					f'Evicting quitting node {request.node.id} from bucket {i}')
+				k_bucket.remove(request.node)
 
-                return pb2.IDKey(
-                    node=self.node,
-                    idkey=request.node.id
-                )
+				return pb2.IDKey(
+					node=self.node,
+					idkey=request.node.id
+				)
 
-        # node not found
-        print(f'No record of quitting node {request.node.id} in k-buckets.')
-        return None
+		# node not found
+		print(f'No record of quitting node {request.node.id} in k-buckets.')
+		return None
 
 
 # start up simple Kademlia server
 def Serve(port, n, k, id):
-    hostname = socket.gethostname()  # gets this machine's host name
-    ip_addr = socket.gethostbyname(hostname)  # IP address from this hostname
+	hostname = socket.gethostname()  # gets this machine's host name
+	ip_addr = socket.gethostbyname(hostname)  # IP address from this hostname
 
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    servicer = KadImplServicer(n, k, id, ip_addr, port)
+	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+	servicer = KadImplServicer(n, k, id, ip_addr, port)
 
-    pb2_grpc.add_KadImplServicer_to_server(servicer, server)
-    server.add_insecure_port(f'[::]:{port}')
-    server.start()
-    # server.wait_for_termination()
+	pb2_grpc.add_KadImplServicer_to_server(servicer, server)
+	server.add_insecure_port(f'[::]:{port}')
+	server.start()
+	# server.wait_for_termination()
 
-    return servicer
+	return servicer
 
 
 def run():
-    if len(sys.argv) != 4:
-        print("Error, correct usage is {} [my id] [my port] [k]".format(
-            sys.argv[0]))
-        sys.exit(-1)
+	if len(sys.argv) != 4:
+		print("Error, correct usage is {} [my id] [my port] [k]".format(
+			sys.argv[0]))
+		sys.exit(-1)
 
-    local_id = int(sys.argv[1])
-    port = str(int(sys.argv[2]))  # add_insecure_port() will want a string
-    k = int(sys.argv[3])
-    n = 4
+	local_id = int(sys.argv[1])
+	port = str(int(sys.argv[2]))  # add_insecure_port() will want a string
+	k = int(sys.argv[3])
+	n = 4
 
-    # setup server, runs in background
-    # returns an instance of KadImplServicer
-    servicer = Serve(port, n, k, local_id)
+	# setup server, runs in background
+	# returns an instance of KadImplServicer
+	servicer = Serve(port, n, k, local_id)
 
-    ''' Use the following code to convert a hostname to an IP and start a channel
-    Note that every stub needs a channel attached to it
-    When you are done with a channel you should call .close() on the channel.
-    Submitty may kill your program if you have too many file descriptors open
-    at the same time. '''
+	''' Use the following code to convert a hostname to an IP and start a channel
+	Note that every stub needs a channel attached to it
+	When you are done with a channel you should call .close() on the channel.
+	Submitty may kill your program if you have too many file descriptors open
+	at the same time. '''
 
-    # remote_addr = socket.gethostbyname(remote_addr_string)
-    # remote_port = int(remote_port_string)
-    # channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
+	# remote_addr = socket.gethostbyname(remote_addr_string)
+	# remote_port = int(remote_port_string)
+	# channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
 
-    # read form stdin for commands
-    for line in sys.stdin:
-        line = line.split()
-        cmd = line.pop(0)
+	# read form stdin for commands
+	for line in sys.stdin:
+		line = line.split()
+		cmd = line.pop(0)
 
-        # command: BOOTSTRAP <remote_hostname> <remote_port>
-        if cmd == 'BOOTSTRAP':
+		# command: BOOTSTRAP <remote_hostname> <remote_port>
+		if cmd == 'BOOTSTRAP':
 
-            # validate usage
-            if len(line) != 2:
-                print('Usage: BOOTSTRAP <remote hostname> <remote port>')
-                continue
+			# validate usage
+			if len(line) != 2:
+				print('Usage: BOOTSTRAP <remote hostname> <remote port>')
+				continue
 
-            remote_hostname, remote_port = line
+			remote_hostname, remote_port = line
+			remote_addr = socket.gethostbyname(remote_hostname)
 
-            # TODO: send remote node a FindNode RPC using local node_id
+			# send remote node a FindNode RPC using the local node's ID
+			# add k closest nodes to this instances servicer as well as
+			# the requested remote host's node
+			with grpc.insecure_channel(f'{remote_addr}:{remote_port}') as channel:
+				stub = pb2_grpc.KadImplStub(channel)
 
-            print('After BOOTSTRAP(<remoteID>), k-buckets are:')
-            servicer.PrintKBuckets()  # TODO: make PrintKBuckets() method
+				# FindNode returns k closest nodes to this clients node
+				node_list = stub.FindNode(pb2.IDKey(
+					node = servicer.node,
+					idkey = servicer.node.id
+				))
 
-        # TODO: add nodes to k-buckets
+				servicer.AddNode(node_list.responding_node)
 
-        # command: FIND_NODE <node_id>
-        elif cmd == 'FIND_NODE':
+				# add k closest nodes (node_list) to this clients k_buckets
+				for node in node_list.nodes:
+					servicer.AddNode(servicer, node)
 
-            # validate usage
-            if len(line) != 1:
-                print('Usage: FIND_NODE <node_id>')
-                continue
+				print(f'After BOOTSTRAP({node_list.responding_node.id}), k-buckets are:')
+				servicer.PrintKBuckets()
 
-            node_id = line.pop()
+		# command: FIND_NODE <node_id>
+		elif cmd == 'FIND_NODE':
 
-            print('Before FIND_NODE command, k-buckets are:')
-            servicer.PrintKBuckets()  # TODO: make PrintKBuckets() method
+			# validate usage
+			if len(line) != 1:
+				print('Usage: FIND_NODE <node_id>')
+				continue
 
-            # skip to output if local node_id matches requested node_id
-            # ( acts as if it found a node )
-            if node_id != servicer.node_id:
-                pass
-            #   - Search Algorithm -
-            #	While some of the k closest nodes to <nodeID> have not been asked:
-            #		S = the k closest IDs to <nodeID>
-            #		S' = nodes in S that have not been contacted yet
-            #		For node in S':
-            #			R = node.FindNode(<nodeID>)
-            #
-            # 			# Always mark node as most recently used
-            #			Update k-buckets with node
-            #
-            # 			# If a node in R was already in a k-bucket, its position does not change.
-            #			# If it was not in the bucket yet, then it is added as the most recently used in that bucket.
-            #			# This _may_ kick out the node from above.
-            #			Update k-buckets with all nodes in R
-            #		If <nodeID> has been found, stop
+			node_id = line.pop()
 
-            print('Serving FindNode(<targetID>) request for <requesterID>')
-            servicer.PrintKBuckets()
+			print('Before FIND_NODE command, k-buckets are:')
+			servicer.PrintKBuckets()
 
-        # command: FIND_VALUE <key>
-        elif cmd == 'FIND_VALUE':
+			# skip to output if local node_id matches requested node_id
+			# ( acts as if it found a node )
+			if node_id != servicer.node_id:
+				pass
+			#   - Search Algorithm -
+			#	While some of the k closest nodes to <nodeID> have not been asked:
+			#		S = the k closest IDs to <nodeID>
+			#		S' = nodes in S that have not been contacted yet
+			#		For node in S':
+			#			R = node.FindNode(<nodeID>)
+			#
+			# 			# Always mark node as most recently used
+			#			Update k-buckets with node
+			#
+			# 			# If a node in R was already in a k-bucket, its position does not change.
+			#			# If it was not in the bucket yet, then it is added as the most recently used in that bucket.
+			#			# This _may_ kick out the node from above.
+			#			Update k-buckets with all nodes in R
+			#		If <nodeID> has been found, stop
 
-            # validate usage
-            if len(line) != 1:
-                print('Usage: FIND_VALUE <key>')
-                continue
+			print('Serving FindNode(<targetID>) request for <requesterID>')
+			servicer.PrintKBuckets()
 
-            key = line.pop()
+		# command: FIND_VALUE <key>
+		elif cmd == 'FIND_VALUE':
 
-            print('Before FIND_VALUE command, k-buckets are:')
-            servicer.PrintKBuckets()
+			# validate usage
+			if len(line) != 1:
+				print('Usage: FIND_VALUE <key>')
+				continue
 
-            # If the target key was found at another node, the program should then print:
-            # Found value "<value>" for key <key>
-            # If the target key was already stored on the current node, the program should instead print:
-            # Found data "<value>" for key <key>
-            # Otherwise the program should print:
-            # Could not find key <key>
+			key = line.pop()
 
-            print('After FIND_VALUE command, k-buckets are:')
-            servicer.PrintKBuckets()
+			print('Before FIND_VALUE command, k-buckets are:')
+			servicer.PrintKBuckets()
 
-        # command: STORE <key> <value>
-        elif cmd == 'STORE':
+			# If the target key was found at another node, the program should then print:
+			# Found value "<value>" for key <key>
+			# If the target key was already stored on the current node, the program should instead print:
+			# Found data "<value>" for key <key>
+			# Otherwise the program should print:
+			# Could not find key <key>
 
-            # validate usage
-            if len(line) != 2:
-                print('Usage: STORE <key> <value>')
-                continue
+			print('After FIND_VALUE command, k-buckets are:')
+			servicer.PrintKBuckets()
 
-            int(key), value = line
+		# command: STORE <key> <value>
+		elif cmd == 'STORE':
 
-            # The node should send a Store RPC to the single node that has ID closest to the key
-            # the current node may be the closest node and may need to store the key/value pair locally
-            print(f'Storing key {key} at node <remoteID>')
+			# validate usage
+			if len(line) != 2:
+				print('Usage: STORE <key> <value>')
+				continue
 
-        # command: QUIT
-        elif cmd == 'QUIT':
+			int(key), value = line
 
-            # send a Quit RPC to each node that is in its k-buckets
-            for k_bucket in reversed(servicer.k_buckets):
-                for node in reversed(k_bucket):
-                    # let stored node know that this node is quitting
-                    with grpc.insecure_channel(
-                            f'{node.address}:{str(node.port)}') as channel:
-                        stub = pb2_grpc.KadImplStub(channel)
+			# The node should send a Store RPC to the single node that has ID closest to the key
+			# the current node may be the closest node and may need to store the key/value pair locally
+			print(f'Storing key {key} at node <remoteID>')
 
-                        print(f'Letting {str(node.id)} know I\'m quitting.')
-                        stub.Quit(pb2.IDKey(
-                            node=servicer.node,
-                            idkey=servicer.node.id
-                        ))
+		# command: QUIT
+		elif cmd == 'QUIT':
 
-            print(f'Shut down node {local_id}')
-            break
+			# send a Quit RPC to each node that is in its k-buckets
+			for k_bucket in reversed(servicer.k_buckets):
+				for node in reversed(k_bucket):
+					# let stored node know that this node is quitting
+					with grpc.insecure_channel(
+							f'{node.address}:{str(node.port)}') as channel:
+						stub = pb2_grpc.KadImplStub(channel)
 
-        # command not supported
-        else:
-            print(
-                'Available Commands:\n' + \
-                '\tBOOTSTRAP  <remote_hostname> <remote_port>\n' + \
-                '\tFIND_NODE  <node_id>\n' + \
-                '\tFIND_VALUE <key>\n' + \
-                '\tSTORE      <key> <value>\n' + \
-                '\tQUIT\n'
-            )
+						print(f'Letting {str(node.id)} know I\'m quitting.')
+						stub.Quit(pb2.IDKey(
+							node=servicer.node,
+							idkey=servicer.node.id
+						))
+
+			print(f'Shut down node {local_id}')
+			break
+
+		# command not supported
+		else:
+			print(
+				'Available Commands:\n' + \
+				'\tBOOTSTRAP  <remote_hostname> <remote_port>\n' + \
+				'\tFIND_NODE  <node_id>\n' + \
+				'\tFIND_VALUE <key>\n' + \
+				'\tSTORE      <key> <value>\n' + \
+				'\tQUIT\n'
+			)
 
 
 if __name__ == '__main__':
-    run()
+	run()
