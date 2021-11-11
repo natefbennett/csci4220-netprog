@@ -172,12 +172,15 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		print(f'Storing key {request.key} value "{request.value}"')
 		self.hash_table[request.key] = request.value
 
-		# TODO: update k_buckets, add requester's ID to be most recently used
+		# update k_buckets, add requester's ID to be most recently used
+		# only if store request from a remote node
+		if request.node != self.node:
+			self.AddNode(request.node)
 
 		# returns the node that the key value pair was stored and the key
 		return pb2.IDKey(
-			node=self.node,
-			idkey=request.key
+			node  = self.node,
+			idkey = request.key
 		)
 
 	# RPC: Quit(IDKey) returns (IDKey)
@@ -369,6 +372,8 @@ def run():
 			servicer.PrintKBuckets()
 
 		# command: STORE <key> <value>
+		# The node should send a Store RPC to the single node that has ID closest to the key
+		# the current node may be the closest node and may need to store the key/value pair locally
 		elif cmd == 'STORE':
 
 			# validate usage
@@ -379,9 +384,34 @@ def run():
 			value = line.pop()
 			key   = int(line.pop())
 
-			# The node should send a Store RPC to the single node that has ID closest to the key
-			# the current node may be the closest node and may need to store the key/value pair locally
-			print(f'Storing key {key} at node <remoteID>')
+			# find closest node to key
+			closest_node = servicer.node
+			dist         = closest_node.id ^ key
+			for bucket in servicer.k_buckets:
+				for node in bucket:
+					temp_dist = node.id ^ key
+					if temp_dist < dist:
+						dist = temp_dist
+						closest_node = node
+
+			# store locally
+			if closest_node == servicer.node:
+				servicer.Store(pb2.KeyValue(
+							node  = servicer.node,
+							key   = key,
+							value = value
+				))
+			# remote storage
+			else:
+				with grpc.insecure_channel(f'{closest_node.address}:{closest_node.port}') as channel:
+					stub = pb2_grpc.KadImplStub(channel)
+					stub.Store(pb2.KeyValue(
+								node  = servicer.node,
+								key   = key,
+								value = value
+					))
+
+			print(f'Storing key {key} at node {closest_node.id}')
 
 		# command: QUIT
 		elif cmd == 'QUIT':
