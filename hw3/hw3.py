@@ -128,10 +128,23 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 				allNodes_with_distance.append(dist_node)
 
 		allNodes_with_distance.sort()
-		if len(allNodes_with_distance)>=self.k:
-			return allNodes_with_distance[:self.k]
-		else:
-			return allNodes_with_distance
+        	if len(allNodes_with_distance) >= self.k:
+            		return [x[1] for x in allNodes_with_distance[:self.k]]
+        	else:
+            		return [x[1] for x in allNodes_with_distance]
+		
+	def Get_k_closest_value(self,requested_id):
+        	allNodes_with_distance = []  # [ <dist, node>, <dist, node>, ... ]
+        	for key in self.hash_table:
+            		dist = key.id ^ requested_id
+            		dist_node = (dist, key)
+            		allNodes_with_distance.append(dist_node)
+
+        	allNodes_with_distance.sort()
+        	if len(allNodes_with_distance) >= self.k:
+            		return [x[1] for x in allNodes_with_distance[:self.k]]
+        	else:
+            		return [x[1] for x in allNodes_with_distance]
 
 	# ------------------------------------------- #
 	#  Remote Procedure Call (RPC) Methods Below  #
@@ -143,9 +156,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# return the k closest nodes to the provided ID
 		# may need to look in several k-buckets
 		self.AddNode(request.node)
-		kClosestNodes = self.Get_k_closest(request.idkey)
-
-		closest_k = [x[1] for x in kClosestNodes] #returns only closest nodes
+		closest_k = self.Get_k_closest(request.idkey)
 		print(
 			f'Serving FindNode({request.idkey}) request for {request.node.id}')
 
@@ -161,9 +172,20 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		# If the remote node has been told to store the key
 		# before it responds with the key and the associated value.
-
-		print(
-			f'Serving FindKey({request.idkey}) request for {request.node.id}')
+		
+		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
+		if self.hash_table.get(request.node) != None:
+	    		value = self.hash_table.get(request.node)
+	    		return pb2.IDKey(
+				node=self.node,
+				idkey=value
+		    	)
+		else:
+			k_closest = self.Get_k_closest_value(request.idkey)
+			return pb2.NodeList(
+				responding_node=self.node,
+				nodes=k_closest
+				)
 
 	# RPC: Store(KeyValue) returns (IDKey)
 	# warining: does not check for collisions
@@ -297,56 +319,34 @@ def run():
 			# ( acts as if it found a node )
 			if node_id != servicer.node_id:
 				pass
-			#   - Search Algorithm -
-			#	While some of the k closest nodes to <nodeID> have not been asked:
-			#		S = the k closest IDs to <nodeID>
-			#		S' = nodes in S that have not been contacted yet
-			#		For node in S':
-			#			R = node.FindNode(<nodeID>)
-			#
-			# 			# Always mark node as most recently used
-			#			Update k-buckets with node
-			#
-			# 			# If a node in R was already in a k-bucket, its position does not change.
-			#			# If it was not in the bucket yet, then it is added as the most recently used in that bucket.
-			#			# This _may_ kick out the node from above.
-			#			Update k-buckets with all nodes in R
-			#		If <nodeID> has been found, stop
-
-			            # with grpc.insecure_channel(f'{}:{}') as channel:
-			firsk = list()
 			contactedNodes = set()
+			found = False
 
-			# TODO: While some of the k closest nodes to <nodeID> have not been asked:
-			while True:
-				S = servicer.FindNode(node_id)
-				S_ = []
-				for dist_nod in S:
-					firstk.append(dist_nod)
+		     	S = servicer.Get_k_closest(node_id)
+		    	for node in S:
+				if node == node_id:
+					found = True
+				 	print('Found')
+				    	break
+				if node in contactedNodes:
+				    	continue
+				else:
+				   	contactedNodes.add(node)
+					R = node.FindNode(node_id)
+					servicer.makeNodeMostRecent(node)
 
-				#if original node found, break
-				if dist_nod[1] == node_id:
-					print(f'Found destination id {node_id}')
-					break
-				if dist_nod[1] not in contactedNodes:
-					contactedNodes.add(dist_nod[1])
-					S_.append(dist_nod[1])
+				    	for R_node in R:
+						if R_node == node_id:
+					    		found = True
+					    		print('Found')
+					    		break
+						if servicer.SearchBucket(R_node)==False:
+					    		servicer.makeNodeMostRecent(R_node)
 
-				for node in S_:
-					k_closest_list = node.FindNode(node_id)
-					servicer.makeNodeMostRecent(nod[1])
-
-				for new_node in k_closest_list:
-					if servicer.SearchBucket(new_node) == False:
-						servicer.makeNodeMostRecent(new_node)
-
-			firstk.sort()
-			if len(firstk) >= servicer.k:
-				firstk = firstk[:servicer.k]
-
-			closest_k = [x[1] for x in firstk] #returns only closest nodes
-			print('Serving FindNode(<targetID>) request for <requesterID>')
-			servicer.PrintKBuckets()
+		    	if not found:
+				print('Did not find')
+		    	print('Serving FindNode(<targetID>) request for <requesterID>')
+		    	servicer.PrintKBuckets()
 
 		# command: FIND_VALUE <key>
 		elif cmd == 'FIND_VALUE':
@@ -367,6 +367,40 @@ def run():
 			# Found data "<value>" for key <key>
 			# Otherwise the program should print:
 			# Could not find key <key>
+			closest = []
+
+            		if servicer.hash_table.get(key)!=None:
+                		value = servicer.hash_table.get(key)
+		    	else:
+				firsk = list()
+				contactedNodes = set()
+				found = False
+
+				dist_node = servicer.Get_k_closest_value(key)
+				for node in dist_node:
+			    	if node in contactedNodes:
+					continue
+			    	else:
+					contactedNodes.add(node)
+					closest.append(node)
+					# returns list of [<dist,node>,<dist,node>....]
+					R = node[1].FindValue(key)
+					servicer.makeNodeMostRecent(node[1])
+
+					for R_node in R:
+				    		closest.append(node)
+				    		if R_node[1] == key:
+							found = True
+							print('Found')
+							break
+					    	if servicer.SearchBucket(R_node[1]) == False:
+							servicer.makeNodeMostRecent(R_node)
+
+				if not found:
+					#return k closest nodes
+					closest.sort()
+					if len(closest)>=servicer.k:
+						closest = closest[:servicer.k]
 
 			print('After FIND_VALUE command, k-buckets are:')
 			servicer.PrintKBuckets()
