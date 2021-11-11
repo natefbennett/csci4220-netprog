@@ -119,11 +119,11 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		return ( False, -1, -1 )
 
-	def Get_k_closest(self, request):
+	def Get_k_closest(self, requested_id):
 		allNodes_with_distance = [] # [ <dist, node>, <dist, node>, ... ]
 		for buckets in self.k_buckets:
 			for n in buckets:
-				dist = n.Distance(request)
+				dist = n.id ^ requested_id
 				dist_node = (dist,n)
 				allNodes_with_distance.append(dist_node)
 
@@ -142,16 +142,16 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	def FindNode(self, request, context):
 		# return the k closest nodes to the provided ID
 		# may need to look in several k-buckets
+		self.AddNode(request.node)
+		kClosestNodes = self.Get_k_closest(request.idkey)
 
-		kClosestNodes = self.Get_k_closest(request)
-		print(kClosestNodes)
-
+		closest_k = [x[1] for x in kClosestNodes] #returns only closest nodes
 		print(
 			f'Serving FindNode({request.idkey}) request for {request.node.id}')
 
 		return pb2.NodeList(
 			responding_node = self.node,
-			nodes           = kClosestNodes
+			nodes           = closest_k
 		)
 
 	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
@@ -186,13 +186,12 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		for i, k_bucket in enumerate(self.k_buckets):
 			# check k buckets for requested node
 			if request.node in k_bucket:
-				print(
-					f'Evicting quitting node {request.node.id} from bucket {i}')
+				print(f'Evicting quitting node {request.node.id} from bucket {i}')
 				k_bucket.remove(request.node)
 
 				return pb2.IDKey(
-					node=self.node,
-					idkey=request.node.id
+					node  = self.node,
+					idkey = request.node.id
 				)
 
 		# node not found
@@ -391,14 +390,13 @@ def run():
 			for k_bucket in reversed(servicer.k_buckets):
 				for node in reversed(k_bucket):
 					# let stored node know that this node is quitting
-					with grpc.insecure_channel(
-							f'{node.address}:{str(node.port)}') as channel:
+					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
 						stub = pb2_grpc.KadImplStub(channel)
 
 						print(f'Letting {str(node.id)} know I\'m quitting.')
 						stub.Quit(pb2.IDKey(
-							node=servicer.node,
-							idkey=servicer.node.id
+							node  = servicer.node,
+							idkey = servicer.node.id
 						))
 
 			print(f'Shut down node {local_id}')

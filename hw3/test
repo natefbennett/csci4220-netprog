@@ -1,0 +1,6 @@
+#!/bin/bash
+
+#xfce4-terminal --tab -e "python3 -u hw3.py 1 9001 2" --tab -e "cat test.txt | python3 -u hw3.py 0 9000 2" 
+
+xfce4-terminal --tab -e "sh -c 'python3 -u hw3.py 1 9001 2 ; bash'"
+xfce4-terminal --tab -e "sh -c 'cat peer00.txt | python3 -u hw3.py 0 9000 2 ; bash'"
