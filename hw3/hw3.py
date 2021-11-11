@@ -39,9 +39,9 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		# setup this servers node
 		self.node = pb2.Node(
-			id=id,
-			port=int(port),
-			address=addr
+			id      = id,
+			port    = int(port),
+			address = addr
 		)
 
 	def PrintKBuckets(self):
@@ -67,23 +67,27 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		for i in range(self.n):
 			lowerbound = 2 ** i
 			upperbound = 2 ** (i+1)
-			if lowerbound < dist and dist <= upperbound:
+
+			if lowerbound <= dist and dist < upperbound:
 				self.k_buckets[i].append(node)
+
+				# kick oldest seen node from bucket
 				if len(self.k_buckets[i]) > self.k:
 					self.k_buckets[i].pop(0)
+
 				return True
 
 		# Error handling: failure to add node to a k-bucket
 		return False
 
-	def DeleteNode(self,node):
+	def DeleteNode(self, node):
 		dist = self.Distance(node)
 
 		# check [i,N) k-buckets
 		for i in range(self.n):
 			lowerbound = 2 ** i
 			upperbound = 2 ** (i + 1)
-			if lowerbound < dist and dist <= upperbound:
+			if lowerbound <= dist and dist < upperbound:
 				index = self.k_buckets[i].index(node)
 				deleted_node = self.k_buckets[i].pop(index)
 
@@ -97,7 +101,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# Error handling: failure to delete node to a k-bucket
 		return False
 
-	def makeNodeMostRecent(self,node):
+	def makeNodeMostRecent(self, node):
 		"""
 		update k-buckets by adding the requester’s ID to be the most recently used
 		remove node id from i'th k-bucket, appending node id again(change
@@ -107,14 +111,16 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		self.DeleteNode(node)
 		self.AddNode(node)
 
-	def SearchBucket(self,node):
-		for n in self.k_buckets:
-			if n==node: return True
+	def SearchBucket(self, node):
+		for i, bucket in enumerate(self.k_buckets):
+			for j, cur_node in bucket:
+				if cur_node == node: 
+					return ( True, i, j )
 
-		return False
+		return ( False, -1, -1 )
 
-	def Get_k_closest(self,request):
-		allNodes_with_distance = [] #[ <dist, node>, <dist,Node2> ...]
+	def Get_k_closest(self, request):
+		allNodes_with_distance = [] # [ <dist, node>, <dist, node>, ... ]
 		for buckets in self.k_buckets:
 			for n in buckets:
 				dist = n.Distance(request)
@@ -138,10 +144,15 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# may need to look in several k-buckets
 
 		kClosestNodes = self.Get_k_closest(request)
+		print(kClosestNodes)
 
 		print(
 			f'Serving FindNode({request.idkey}) request for {request.node.id}')
-		pass
+
+		return pb2.NodeList(
+			responding_node = self.node,
+			nodes           = kClosestNodes
+		)
 
 	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
 	def FindValue(self, request, context):
@@ -189,21 +200,15 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		return None
 
 
-# start up simple Kademlia server
-def Serve(port, n, k, id):
-	hostname = socket.gethostname()  # gets this machine's host name
-	ip_addr = socket.gethostbyname(hostname)  # IP address from this hostname
-
-	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-	servicer = KadImplServicer(n, k, id, ip_addr, port)
-
-	pb2_grpc.add_KadImplServicer_to_server(servicer, server)
-	server.add_insecure_port(f'[::]:{port}')
-	server.start()
-	# server.wait_for_termination()
-
-	return servicer
-
+def PrintCommandMenu():
+	print(
+		'Available Commands:\n' + \
+		'\tBOOTSTRAP  <remote_hostname> <remote_port>\n' + \
+		'\tFIND_NODE  <node_id>\n' + \
+		'\tFIND_VALUE <key>\n' + \
+		'\tSTORE      <key> <value>\n' + \
+		'\tQUIT\n'
+	)
 
 def run():
 	if len(sys.argv) != 4:
@@ -218,21 +223,26 @@ def run():
 
 	# setup server, runs in background
 	# returns an instance of KadImplServicer
-	servicer = Serve(port, n, k, local_id)
+	hostname = socket.gethostname()  # gets this machine's host name
+	ip_addr = socket.gethostbyname(hostname)  # IP address from this hostname
 
-	''' Use the following code to convert a hostname to an IP and start a channel
-	Note that every stub needs a channel attached to it
-	When you are done with a channel you should call .close() on the channel.
-	Submitty may kill your program if you have too many file descriptors open
-	at the same time. '''
+	server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+	servicer = KadImplServicer(n, k, local_id, ip_addr, port)
 
-	# remote_addr = socket.gethostbyname(remote_addr_string)
-	# remote_port = int(remote_port_string)
-	# channel     = grpc.insecure_channel(remote_addr + ':' + str(remote_port))
+	pb2_grpc.add_KadImplServicer_to_server(servicer, server)
+	server.add_insecure_port(f'[::]:{port}')
+	server.start()
 
 	# read form stdin for commands
 	for line in sys.stdin:
+
 		line = line.split()
+
+		# user hit enter with no data
+		if line == []: 
+			PrintCommandMenu()
+			continue 
+
 		cmd = line.pop(0)
 
 		# command: BOOTSTRAP <remote_hostname> <remote_port>
@@ -254,15 +264,16 @@ def run():
 
 				# FindNode returns k closest nodes to this clients node
 				node_list = stub.FindNode(pb2.IDKey(
-					node = servicer.node,
+					node  = servicer.node,
 					idkey = servicer.node.id
 				))
 
+				# servicer.AddNode(node_list.responding_node)
 				servicer.AddNode(node_list.responding_node)
 
 				# add k closest nodes (node_list) to this clients k_buckets
 				for node in node_list.nodes:
-					servicer.AddNode(servicer, node)
+					servicer.AddNode(node)
 
 				print(f'After BOOTSTRAP({node_list.responding_node.id}), k-buckets are:')
 				servicer.PrintKBuckets()
@@ -325,7 +336,7 @@ def run():
 
 				for new_node in k_closest_list:
 					if servicer.SearchBucket(new_node) == False:
-					servicer.makeNodeMostRecent(new_node)
+						servicer.makeNodeMostRecent(new_node)
 
 			firstk.sort()
 			if len(firstk) >= servicer.k:
@@ -366,7 +377,8 @@ def run():
 				print('Usage: STORE <key> <value>')
 				continue
 
-			int(key), value = line
+			value = line.pop()
+			key   = int(line.pop())
 
 			# The node should send a Store RPC to the single node that has ID closest to the key
 			# the current node may be the closest node and may need to store the key/value pair locally
@@ -394,14 +406,7 @@ def run():
 
 		# command not supported
 		else:
-			print(
-				'Available Commands:\n' + \
-				'\tBOOTSTRAP  <remote_hostname> <remote_port>\n' + \
-				'\tFIND_NODE  <node_id>\n' + \
-				'\tFIND_VALUE <key>\n' + \
-				'\tSTORE      <key> <value>\n' + \
-				'\tQUIT\n'
-			)
+			PrintCommandMenu()
 
 
 if __name__ == '__main__':
