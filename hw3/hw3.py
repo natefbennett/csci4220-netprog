@@ -128,23 +128,23 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 				allNodes_with_distance.append(dist_node)
 
 		allNodes_with_distance.sort()
-        	if len(allNodes_with_distance) >= self.k:
-            		return [x[1] for x in allNodes_with_distance[:self.k]]
-        	else:
-            		return [x[1] for x in allNodes_with_distance]
+		if len(allNodes_with_distance) >= self.k:
+			return [x[1] for x in allNodes_with_distance[:self.k]]
+		else:
+			return [x[1] for x in allNodes_with_distance]
 		
 	def Get_k_closest_value(self,requested_id):
-        	allNodes_with_distance = []  # [ <dist, node>, <dist, node>, ... ]
-        	for key in self.hash_table:
-            		dist = key.id ^ requested_id
-            		dist_node = (dist, key)
-            		allNodes_with_distance.append(dist_node)
+			allNodes_with_distance = []  # [ <dist, node>, <dist, node>, ... ]
+			for key in self.hash_table:
+				dist = key.id ^ requested_id
+				dist_node = (dist, key)
+				allNodes_with_distance.append(dist_node)
 
-        	allNodes_with_distance.sort()
-        	if len(allNodes_with_distance) >= self.k:
-            		return [x[1] for x in allNodes_with_distance[:self.k]]
-        	else:
-            		return [x[1] for x in allNodes_with_distance]
+			allNodes_with_distance.sort()
+			if len(allNodes_with_distance) >= self.k:
+				return [x[1] for x in allNodes_with_distance[:self.k]]
+			else:
+				return [x[1] for x in allNodes_with_distance]
 
 	# ------------------------------------------- #
 	#  Remote Procedure Call (RPC) Methods Below  #
@@ -175,17 +175,17 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		
 		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
 		if self.hash_table.get(request.node) != None:
-	    		value = self.hash_table.get(request.node)
-	    		return pb2.IDKey(
-				node=self.node,
-				idkey=value
-		    	)
+				value = self.hash_table.get(request.node)
+				return pb2.IDKey(
+						node  = self.node,
+						idkey = value
+				)
 		else:
 			k_closest = self.Get_k_closest_value(request.idkey)
 			return pb2.NodeList(
-				responding_node=self.node,
-				nodes=k_closest
-				)
+				responding_node = self.node,
+				nodes           = k_closest
+			)
 
 	# RPC: Store(KeyValue) returns (IDKey)
 	# warining: does not check for collisions
@@ -208,12 +208,12 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	# RPC: Quit(IDKey) returns (IDKey)
 	def Quit(self, request, context):
 
-		for i, k_bucket in enumerate(self.k_buckets):
+		for i, k_bucket in enumerate(self.k_buckets[:]):
 			# check k buckets for requested node
 			if request.node in k_bucket:
 				print(f'Evicting quitting node {request.node.id} from bucket {i}')
-				k_bucket.remove(request.node)
-
+				print(self.DeleteNode(request.node))
+				print(k_bucket)
 				return pb2.IDKey(
 					node  = self.node,
 					idkey = request.node.id
@@ -322,31 +322,31 @@ def run():
 			contactedNodes = set()
 			found = False
 
-		     	S = servicer.Get_k_closest(node_id)
-		    	for node in S:
+			S = servicer.Get_k_closest(node_id)
+			for node in S:
 				if node == node_id:
 					found = True
-				 	print('Found')
-				    	break
+					print('Found')
+					break
 				if node in contactedNodes:
-				    	continue
+					continue
 				else:
-				   	contactedNodes.add(node)
+					contactedNodes.add(node)
 					R = node.FindNode(node_id)
 					servicer.makeNodeMostRecent(node)
 
-				    	for R_node in R:
+					for R_node in R:
 						if R_node == node_id:
-					    		found = True
-					    		print('Found')
-					    		break
+							found = True
+							print('Found')
+							break
 						if servicer.SearchBucket(R_node)==False:
-					    		servicer.makeNodeMostRecent(R_node)
+							servicer.makeNodeMostRecent(R_node)
 
-		    	if not found:
+			if not found:
 				print('Did not find')
-		    	print('Serving FindNode(<targetID>) request for <requesterID>')
-		    	servicer.PrintKBuckets()
+			print('Serving FindNode(<targetID>) request for <requesterID>')
+			servicer.PrintKBuckets()
 
 		# command: FIND_VALUE <key>
 		elif cmd == 'FIND_VALUE':
@@ -369,38 +369,38 @@ def run():
 			# Could not find key <key>
 			closest = []
 
-            		if servicer.hash_table.get(key)!=None:
-                		value = servicer.hash_table.get(key)
-		    	else:
+			if servicer.hash_table.get(key)!=None:
+				value = servicer.hash_table.get(key)
+			else:
 				firsk = list()
 				contactedNodes = set()
 				found = False
 
 				dist_node = servicer.Get_k_closest_value(key)
 				for node in dist_node:
-			    	if node in contactedNodes:
-					continue
-			    	else:
-					contactedNodes.add(node)
-					closest.append(node)
-					# returns list of [<dist,node>,<dist,node>....]
-					R = node[1].FindValue(key)
-					servicer.makeNodeMostRecent(node[1])
+					if node in contactedNodes:
+						continue
+					else:
+						contactedNodes.add(node)
+						closest.append(node)
+						# returns list of [<dist,node>,<dist,node>....]
+						R = node[1].FindValue(key)
+						servicer.makeNodeMostRecent(node[1])
 
-					for R_node in R:
-				    		closest.append(node)
-				    		if R_node[1] == key:
-							found = True
-							print('Found')
-							break
-					    	if servicer.SearchBucket(R_node[1]) == False:
-							servicer.makeNodeMostRecent(R_node)
+						for R_node in R:
+								closest.append(node)
+								if R_node[1] == key:
+									found = True
+									print('Found')
+									break
+								if servicer.SearchBucket(R_node[1]) == False:
+									servicer.makeNodeMostRecent(R_node)
 
-				if not found:
-					#return k closest nodes
-					closest.sort()
-					if len(closest)>=servicer.k:
-						closest = closest[:servicer.k]
+					if not found:
+						#return k closest nodes
+						closest.sort()
+						if len(closest)>=servicer.k:
+							closest = closest[:servicer.k]
 
 			print('After FIND_VALUE command, k-buckets are:')
 			servicer.PrintKBuckets()
@@ -452,6 +452,7 @@ def run():
 
 			# send a Quit RPC to each node that is in its k-buckets
 			for k_bucket in reversed(servicer.k_buckets):
+
 				for node in reversed(k_bucket):
 					# let stored node know that this node is quitting
 					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:

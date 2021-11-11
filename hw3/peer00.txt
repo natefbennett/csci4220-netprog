@@ -1,3 +1,4 @@
 BOOTSTRAP localhost 9001
-STORE 9 apples
+STORE 5 apples
+FIND_VALUE 5
 QUIT
