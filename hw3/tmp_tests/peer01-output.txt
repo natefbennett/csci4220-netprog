@@ -1,0 +1,6 @@
+Serving FindNode(0) request for 0
+Storing key 5 value "apples"
+Serving FindKey(5) request for 0
+Evicting quitting node 0 from bucket 0
+Shut down node 1
+

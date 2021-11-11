@@ -1,0 +1,19 @@
+After BOOTSTRAP(1), k-buckets are:
+0: 1:9001
+1:
+2:
+3:
+Storing key 5 at node 1
+Before FIND_VALUE command, k-buckets are:
+0: 1:9001
+1:
+2:
+3:
+Found value "apples" for key 5
+After FIND_VALUE command, k-buckets are:
+0: 1:9001
+1:
+2:
+3:
+Letting 1 know I'm quitting.
+Shut down node 0
