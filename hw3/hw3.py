@@ -198,7 +198,8 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	# RPC: Store(KeyValue) returns (IDKey)
 	# warining: does not check for collisions
 	def Store(self, request, context):
-
+		
+		print(f'Storing key {request.key} value "{request.value}"')
 		self.hash_table[request.key] = request.value
 
 		# update k_buckets, add requester's ID to be most recently used
@@ -331,9 +332,8 @@ def run():
 
 			S = servicer.Get_k_closest(node_id)
 			for node in S:
-				if node == node_id:
+				if node.id == node_id:
 					found = True
-					print('Found')
 					break
 				if node in contactedNodes:
 					continue
@@ -353,14 +353,16 @@ def run():
 						for n in node_list.nodes:
 							if n.id == node_id:
 								found = True
-								print('Found')
 								break
 							if servicer.SearchBuckets(n)==False:
 								servicer.makeNodeMostRecent(n)
 
 			if not found:
-				print('Did not find')
+				print(f'Could not find destination id {node_id}')
+			else:
+				print(f'Found destination id {node_id}')
 
+			print('After FIND_NODE command, k-buckets are:')
 			servicer.PrintKBuckets()
 
 		# command: FIND_VALUE <key>

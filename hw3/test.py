@@ -180,13 +180,15 @@ if __name__ == '__main__':
         print(f'Starting SimpleKad: {peer.invocation}') #DEBUG
         # procs[peer.id] = subprocess.Popen(peer.invocation.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         procs[peer.id] = subprocess.Popen(peer.invocation.split(), stdin=subprocess.PIPE)
+        time.sleep(1)
+
     print(f'Running Test {target_test_id} ...')
     # call commands in order, put output in file "test-peerXX-output.txt"
     for peer_id in test.cmd_calling_order:
         print(f'  command {peer_id}: {test.peers[peer_id].inputs[0]}') #DEBUG
         procs[peer_id].stdin.write(f'{test.peers[peer_id].inputs.pop(0)}\n'.encode('utf-8'))
         procs[peer_id].stdin.flush()
-        time.sleep(1)
+        time.sleep(2)
         # stdoutdata = procs[peer_id].stdout.readlines()
         # print(f'Got Response:\n{stdoutdata}') #DEBUG
         # with open(f'{folder_path}/test-{peer.id}-output.txt', 'a') as peer_output:
