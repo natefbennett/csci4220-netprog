@@ -170,25 +170,28 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
 
-		# If the remote node has not been told to store the key,
-		# it will reply with the k closest nodes to the key.
+		# If the remote node has been told to store the key
+		# before it responds with the key and the associated value.
 		if self.hash_table.get(request.node) != None:
 				
 				value = self.hash_table.get(request.node)
-				return pb2.KeyValue(
-						node  = self.node,
-						key   = request.idkey,
-						value = value
+				return pb2.KV_Node_Wrapper(
+					responding_node = self.node,
+					mode_kv         = True,
+					kv              = pb2.KeyValue(
+										node  = self.node,
+										key   = request.idkey,
+										value = value
+									)
 				)
-				
-		# If the remote node has been told to store the key
-		# before it responds with the key and the associated value.
+		# If the remote node has not been told to store the key,
+		# it will reply with the k closest nodes to the key.
 		else:
 			k_closest = self.Get_k_closest_value(request.idkey)
 			return pb2.KV_Node_Wrapper(
-				responding_node = self.node,
-				mode_kv         = False,
-				nodes           = k_closest
+					responding_node = self.node,
+					mode_kv         = False,
+					nodes           = k_closest
 			)
 
 	# RPC: Store(KeyValue) returns (IDKey)
@@ -388,9 +391,24 @@ def run():
 						contactedNodes.add(node)
 						closest.append(node)
 						# returns list of [<dist,node>,<dist,node>....]
-						R = node[1].FindValue(key)
-						servicer.makeNodeMostRecent(node[1])
+						# R = node[1].FindValue(key)
+						# servicer.makeNodeMostRecent(node[1])
 
+						with grpc.insecure_channel(f'{node[1].address}:{str(node[1].port)}') as channel:
+							stub = pb2_grpc.KadImplStub(channel)
+
+							kv_node_wrapper = stub.FindValue(pb2.IDKey(
+								node  = servicer.node,
+								idkey = key
+							))
+						# remote node has been told to store key before
+						# get key value back instead of node list
+						if kv_node_wrapper.mode_kv:
+							pass
+						# remote node has not been told to store key before
+						# get node list instead of key value
+						else:
+							pass
 						for R_node in R:
 								closest.append(node)
 								if R_node[1] == key:
