@@ -204,7 +204,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	def Store(self, request, context):
 
 		self.hash_table[request.key] = request.value
-		# print(f'DEBUG: request.node={request.node}')
+
 		# update k_buckets, add requester's ID to be most recently used
 		# only if store request from a remote node
 		if request.node != self.node:
@@ -456,7 +456,7 @@ def run():
 					if temp_dist < dist:
 						dist = temp_dist
 						closest_node = node
-			print(f'DEBUG: node={servicer.node.id}')
+
 			# store locally
 			if closest_node == servicer.node:
 				servicer.Store(pb2.KeyValue(

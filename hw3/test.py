@@ -140,7 +140,7 @@ if __name__ == '__main__':
     try:
         target_test_id = int(sys.argv[2])
     except:
-        target_test_id = int(sys.stdin.readline())
+        target_test_id = int(input())
     
     test = test_dict[target_test_id]
 
