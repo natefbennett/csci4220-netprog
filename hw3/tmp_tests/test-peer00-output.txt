@@ -5,7 +5,7 @@ Before FIND_VALUE command, k-buckets are:
 1:
 2:
 3: 8:9001
-Found data "apples" for key 1
+Could not find key 1
 After FIND_VALUE command, k-buckets are:
 0:
 1:

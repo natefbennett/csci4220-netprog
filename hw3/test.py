@@ -3,6 +3,7 @@ import sys
 import os
 import subprocess
 import time
+import filecmp
 
 class PeerData:
 
@@ -136,11 +137,12 @@ if __name__ == '__main__':
     print(f'\nSelect a Test [1-{len(test_dict)}]:')
     for test_id in test_dict:
         print(f'{test_id}: =TEST{test_id}=')
-
+    print()
     try:
         target_test_id = int(sys.argv[2])
     except:
         target_test_id = int(input())
+        print()
     
     test = test_dict[target_test_id]
 
@@ -161,13 +163,20 @@ if __name__ == '__main__':
         # folder does not exist
         else:
             os.mkdir(folder_path)
-    else: print('Error: Must be in /hw3 directory to build tests!')
-   
+    else: 
+        print('Error: Must be in /hw3 directory to build tests!')
+        exit()
+
+    print()
+    print(f'Running Test {target_test_id} ...')
+
     procs = dict() # put all running instances of kad server here
+    output_match = dict() # store path to expected output file and test output file
     # write files for "peerXX-input.txt" and "peerXX-output.txt"
     for peer in test.peers.values():
         # create output files
-        with open(f'{folder_path}/{peer.id}-output.txt', 'w') as peer_output:
+        expected_output_file = f'{folder_path}/{peer.id}-output.txt'
+        with open(expected_output_file, 'w') as peer_output:
             for line in peer.output:
                 peer_output.write(f'{line}\n')
 
@@ -179,10 +188,12 @@ if __name__ == '__main__':
         # start process, apture process output
         print(f'Starting SimpleKad: {peer.invocation}') #DEBUG
         # procs[peer.id] = subprocess.Popen(peer.invocation.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        procs[peer.id] = subprocess.Popen(peer.invocation.split(), stdin=subprocess.PIPE)
+        result_output_file = f'{folder_path}/test-{peer.id}-output.txt'
+        f = open(result_output_file, 'a')
+        output_match[peer.id] = ( expected_output_file, result_output_file )
+        procs[peer.id] = subprocess.Popen(peer.invocation.split(), stdin=subprocess.PIPE, stdout=f)
         time.sleep(1)
 
-    print(f'Running Test {target_test_id} ...')
     # call commands in order, put output in file "test-peerXX-output.txt"
     for peer_id in test.cmd_calling_order:
         print(f'  command {peer_id}: {test.peers[peer_id].inputs[0]}') #DEBUG
@@ -194,8 +205,14 @@ if __name__ == '__main__':
         # with open(f'{folder_path}/test-{peer.id}-output.txt', 'a') as peer_output:
         #     peer_output.write(stdoutdata)
 
-    
-    
-
+    print()
+    print('Printing Results ...')
+    for peer_id, (expected, result) in output_match.items():
+        if(filecmp.cmp(expected, result)):
+            print(f'Files for {peer_id} seem to match!\n')
+        else:
+            print(f'File differences found in {peer_id} ...')
+            subprocess.run(['diff', expected, result])
+            print()
     # run bash script
     # compare output with diff

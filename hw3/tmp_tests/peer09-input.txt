@@ -1,3 +1,0 @@
-BOOTSTRAP localhost 9001
-FIND_VALUE 9
-QUIT

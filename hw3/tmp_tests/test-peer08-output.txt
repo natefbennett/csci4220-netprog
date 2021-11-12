@@ -3,6 +3,7 @@ After BOOTSTRAP(0), k-buckets are:
 1:
 2:
 3: 0:9000
+Serving FindKey(1) request for 0
 Before FIND_VALUE command, k-buckets are:
 0:
 1:
@@ -28,4 +29,3 @@ After FIND_VALUE command, k-buckets are:
 3: 0:9000
 Evicting quitting node 0 from bucket 3
 Shut down node 8
-

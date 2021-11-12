@@ -173,18 +173,17 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		# If the remote node has been told to store the key
 		# before it responds with the key and the associated value.
-		if self.hash_table.get(request.idkey) != None:
-				
-				value = self.hash_table.get(request.idkey)
-				return pb2.KV_Node_Wrapper(
-					responding_node = self.node,
-					mode_kv         = True,
-					kv              = pb2.KeyValue(
-										node  = self.node,
-										key   = request.idkey,
-										value = value
-									)
-				)
+		if self.hash_table.get(request.idkey) != None:	
+			value = self.hash_table.get(request.idkey)
+			return pb2.KV_Node_Wrapper(
+				responding_node = self.node,
+				mode_kv         = True,
+				kv              = pb2.KeyValue(
+									node  = self.node,
+									key   = request.idkey,
+									value = value
+								)
+			)
 		# If the remote node has not been told to store the key,
 		# it will reply with the k closest nodes to the key.
 		else:
@@ -199,13 +198,13 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	# warining: does not check for collisions
 	def Store(self, request, context):
 		
-		print(f'Storing key {request.key} value "{request.value}"')
 		self.hash_table[request.key] = request.value
 
 		# update k_buckets, add requester's ID to be most recently used
 		# only if store request from a remote node
 		if request.node != self.node:
 			self.AddNode(request.node)
+			print(f'Storing key {request.key} value "{request.value}"')
 
 		# returns the node that the key value pair was stored and the key
 		return pb2.IDKey(
@@ -391,7 +390,7 @@ def run():
 				print(f'Found data "{value}" for key {key}')
 			else:
 				# firsk = list()
-				contactedNodes = []
+				contactedNodes = [servicer.node]
 				found = False
 
 				nodes = servicer.Get_k_closest_value(key)
