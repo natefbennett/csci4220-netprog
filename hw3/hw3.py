@@ -223,7 +223,8 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 			# check k buckets for requested node
 			if request.node in k_bucket:
 				print(f'Evicting quitting node {request.node.id} from bucket {i}')
-
+				self.DeleteNode(request.node
+				)
 				return pb2.IDKey(
 					node  = self.node,
 					idkey = request.node.id
