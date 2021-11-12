@@ -55,30 +55,16 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 			print(line)
 
+	def SearchBuckets(self, node):
+		for i, bucket in enumerate(self.k_buckets):
+			for j, cur_node in enumerate(bucket):
+				if cur_node == node: 
+					return ( True, i, j )
+
+		return ( False, -1, -1 )
+
 	def Distance(self, node):
 		return self.node.id ^ node.id
-
-	# adds the provided node to a k bucket
-	def AddNode(self, node):
-		#only add k entries in a bucket
-		dist = self.Distance(node)
-
-		# check [i,N) k-buckets
-		for i in range(self.n):
-			lowerbound = 2 ** i
-			upperbound = 2 ** (i+1)
-
-			if lowerbound <= dist and dist < upperbound:
-				self.k_buckets[i].append(node)
-
-				# kick oldest seen node from bucket
-				if len(self.k_buckets[i]) > self.k:
-					self.k_buckets[i].pop(0)
-
-				return True
-
-		# Error handling: failure to add node to a k-bucket
-		return False
 
 	def DeleteNode(self, node):
 		dist = self.Distance(node)
@@ -101,6 +87,31 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# Error handling: failure to delete node to a k-bucket
 		return False
 
+	# adds the provided node to a k bucket
+	def AddNode(self, node):
+		#only add k entries in a bucket
+		dist = self.Distance(node)
+
+		# check [i,N) k-buckets
+		for i in range(self.n):
+			lowerbound = 2 ** i
+			upperbound = 2 ** (i+1)
+
+			if lowerbound <= dist and dist < upperbound:
+				if self.SearchBuckets(node)[0]:
+					self.DeleteNode(node)
+
+				self.k_buckets[i].append(node)
+
+				# kick oldest seen node from bucket
+				if len(self.k_buckets[i]) > self.k:
+					self.k_buckets[i].pop(0)
+
+				return True
+
+		# Error handling: failure to add node to a k-bucket
+		return False
+
 	def makeNodeMostRecent(self, node):
 		"""
 		update k-buckets by adding the requester’s ID to be the most recently used
@@ -110,14 +121,6 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		"""
 		self.DeleteNode(node)
 		self.AddNode(node)
-
-	def SearchBucket(self, node):
-		for i, bucket in enumerate(self.k_buckets):
-			for j, cur_node in bucket:
-				if cur_node == node: 
-					return ( True, i, j )
-
-		return ( False, -1, -1 )
 
 	def Get_k_closest(self, requested_id):
 		allNodes_with_distance = [] # [ <dist, node>, <dist, node>, ... ]
@@ -135,10 +138,12 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		
 	def Get_k_closest_value(self,requested_id):
 			allNodes_with_distance = []  # [ <dist, node>, <dist, node>, ... ]
-			for key in self.hash_table:
-				dist = key.id ^ requested_id
-				dist_node = (dist, key)
-				allNodes_with_distance.append(dist_node)
+
+			for buckets in self.k_buckets:
+				for node in buckets:
+					dist = int(node.id) ^ int(requested_id)
+					dist_node = (dist, node)
+					allNodes_with_distance.append(dist_node)
 
 			allNodes_with_distance.sort()
 			if len(allNodes_with_distance) >= self.k:
@@ -172,9 +177,9 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 		# If the remote node has been told to store the key
 		# before it responds with the key and the associated value.
-		if self.hash_table.get(request.node) != None:
+		if self.hash_table.get(request.idkey) != None:
 				
-				value = self.hash_table.get(request.node)
+				value = self.hash_table.get(request.idkey)
 				return pb2.KV_Node_Wrapper(
 					responding_node = self.node,
 					mode_kv         = True,
@@ -198,9 +203,8 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 	# warining: does not check for collisions
 	def Store(self, request, context):
 
-		print(f'Storing key {request.key} value "{request.value}"')
 		self.hash_table[request.key] = request.value
-
+		# print(f'DEBUG: request.node={request.node}')
 		# update k_buckets, add requester's ID to be most recently used
 		# only if store request from a remote node
 		if request.node != self.node:
@@ -219,8 +223,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 			# check k buckets for requested node
 			if request.node in k_bucket:
 				print(f'Evicting quitting node {request.node.id} from bucket {i}')
-				print(self.DeleteNode(request.node))
-				print(k_bucket)
+
 				return pb2.IDKey(
 					node  = self.node,
 					idkey = request.node.id
@@ -347,7 +350,7 @@ def run():
 							found = True
 							print('Found')
 							break
-						if servicer.SearchBucket(R_node)==False:
+						if servicer.SearchBuckets(R_node)==False:
 							servicer.makeNodeMostRecent(R_node)
 
 			if not found:
@@ -378,51 +381,54 @@ def run():
 
 			if servicer.hash_table.get(key)!=None:
 				value = servicer.hash_table.get(key)
+				print(f'Found data "{value}" for key {key}')
 			else:
-				firsk = list()
-				contactedNodes = set()
+				# firsk = list()
+				contactedNodes = []
 				found = False
 
-				dist_node = servicer.Get_k_closest_value(key)
-				for node in dist_node:
+				nodes = servicer.Get_k_closest_value(key)
+
+				while not found and len(nodes) > 0:
+					node = nodes.pop(0)
 					if node in contactedNodes:
 						continue
 					else:
-						contactedNodes.add(node)
-						closest.append(node)
+						contactedNodes.append(node)
+						servicer.AddNode(node) # update k_buckets
+						# closest.append(node)
 						# returns list of [<dist,node>,<dist,node>....]
 						# R = node[1].FindValue(key)
 						# servicer.makeNodeMostRecent(node[1])
 
-						with grpc.insecure_channel(f'{node[1].address}:{str(node[1].port)}') as channel:
+						with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
 							stub = pb2_grpc.KadImplStub(channel)
 
 							kv_node_wrapper = stub.FindValue(pb2.IDKey(
 								node  = servicer.node,
-								idkey = key
+								idkey = int(key)
 							))
-						# remote node has been told to store key before
-						# get key value back instead of node list
-						if kv_node_wrapper.mode_kv:
-							pass
-						# remote node has not been told to store key before
-						# get node list instead of key value
-						else:
-							pass
-						for R_node in R:
-								closest.append(node)
-								if R_node[1] == key:
-									found = True
-									print('Found')
-									break
-								if servicer.SearchBucket(R_node[1]) == False:
-									servicer.makeNodeMostRecent(R_node)
 
-					if not found:
-						#return k closest nodes
-						closest.sort()
-						if len(closest)>=servicer.k:
-							closest = closest[:servicer.k]
+							# remote node has been told to store key before
+							# get key value
+							if kv_node_wrapper.mode_kv:
+								print(f'Found value "{kv_node_wrapper.kv.value}" for key {kv_node_wrapper.kv.key}')
+								found = True
+							# remote node has not been told to store key before
+							# get node list
+							else:
+								nodes += list(kv_node_wrapper.nodes)
+								for R_node in kv_node_wrapper.nodes:
+										if servicer.SearchBuckets(R_node)[0] == False:
+											servicer.makeNodeMostRecent(R_node)
+
+					# if not found:
+					# 	#return k closest nodes
+					# 	closest.sort()
+					# 	if len(closest)>=servicer.k:
+					# 		closest = closest[:servicer.k]
+			if not found:
+				print(f'Could not find key {key}')
 
 			print('After FIND_VALUE command, k-buckets are:')
 			servicer.PrintKBuckets()
@@ -449,7 +455,7 @@ def run():
 					if temp_dist < dist:
 						dist = temp_dist
 						closest_node = node
-
+			print(f'DEBUG: node={servicer.node.id}')
 			# store locally
 			if closest_node == servicer.node:
 				servicer.Store(pb2.KeyValue(
