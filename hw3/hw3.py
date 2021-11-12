@@ -167,23 +167,27 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 
 	# RPC: FindValue(IDKey) returns (KV_Node_Wrapper)
 	def FindValue(self, request, context):
+
+		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
+
 		# If the remote node has not been told to store the key,
 		# it will reply with the k closest nodes to the key.
-
+		if self.hash_table.get(request.node) != None:
+				
+				value = self.hash_table.get(request.node)
+				return pb2.KeyValue(
+						node  = self.node,
+						key   = request.idkey,
+						value = value
+				)
+				
 		# If the remote node has been told to store the key
 		# before it responds with the key and the associated value.
-		
-		print(f'Serving FindKey({request.idkey}) request for {request.node.id}')
-		if self.hash_table.get(request.node) != None:
-				value = self.hash_table.get(request.node)
-				return pb2.IDKey(
-						node  = self.node,
-						idkey = value
-				)
 		else:
 			k_closest = self.Get_k_closest_value(request.idkey)
-			return pb2.NodeList(
+			return pb2.KV_Node_Wrapper(
 				responding_node = self.node,
+				mode_kv         = False,
 				nodes           = k_closest
 			)
 
