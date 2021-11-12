@@ -1,0 +1,2 @@
+BOOTSTRAP localhost 9001
+QUIT

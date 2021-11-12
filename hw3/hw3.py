@@ -74,15 +74,11 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 			lowerbound = 2 ** i
 			upperbound = 2 ** (i + 1)
 			if lowerbound <= dist and dist < upperbound:
-				index = self.k_buckets[i].index(node)
-				deleted_node = self.k_buckets[i].pop(index)
+				if node in self.k_buckets[i]:
+					index = self.k_buckets[i].index(node)
+					deleted_node = self.k_buckets[i].pop(index)
 
-				# Error handling: if deleted node is not the node given
-				if deleted_node != node:
-					print('Error: DeleteNode() removed the wrong node!')
-					return False
-
-				return True
+					return True
 
 		# Error handling: failure to delete node to a k-bucket
 		return False
@@ -463,7 +459,7 @@ def run():
 							node  = servicer.node,
 							key   = key,
 							value = value
-				))
+				), None)
 			# remote storage
 			else:
 				with grpc.insecure_channel(f'{closest_node.address}:{closest_node.port}') as channel:

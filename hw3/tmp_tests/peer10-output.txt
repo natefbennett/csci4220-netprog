@@ -1,0 +1,13 @@
+After BOOTSTRAP(8), k-buckets are:
+0:
+1: 8:9001 9:9002
+2:
+3: 0:9000
+Storing key 10 value "dates"
+Serving FindKey(10) request for 0
+Serving FindKey(10) request for 0
+Evicting quitting node 0 from bucket 3
+Evicting quitting node 8 from bucket 1
+Letting 9 know I'm quitting.
+Shut down node 10
+
