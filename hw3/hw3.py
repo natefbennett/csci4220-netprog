@@ -122,7 +122,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		allNodes_with_distance = [] # [ <dist, node>, <dist, node>, ... ]
 		for buckets in self.k_buckets:
 			for n in buckets:
-				dist = n.id ^ requested_id
+				dist = int(n.id) ^ int(requested_id)
 				dist_node = (dist,n)
 				allNodes_with_distance.append(dist_node)
 
@@ -324,9 +324,9 @@ def run():
 
 			# skip to output if local node_id matches requested node_id
 			# ( acts as if it found a node )
-			if node_id != servicer.node_id:
+			if node_id != servicer.node.id:
 				pass
-			contactedNodes = set()
+			contactedNodes = []
 			found = False
 
 			S = servicer.Get_k_closest(node_id)
@@ -338,21 +338,29 @@ def run():
 				if node in contactedNodes:
 					continue
 				else:
-					contactedNodes.add(node)
-					R = node.FindNode(node_id)
+					contactedNodes.append(node)
+					# R = node.FindNode(node_id)
 					servicer.makeNodeMostRecent(node)
 
-					for R_node in R:
-						if R_node == node_id:
-							found = True
-							print('Found')
-							break
-						if servicer.SearchBuckets(R_node)==False:
-							servicer.makeNodeMostRecent(R_node)
+					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
+						stub = pb2_grpc.KadImplStub(channel)
+
+						node_list = stub.FindNode(pb2.IDKey(
+							node  = servicer.node,
+							idkey = int(node_id)
+						))
+
+						for n in node_list.nodes:
+							if n.id == node_id:
+								found = True
+								print('Found')
+								break
+							if servicer.SearchBuckets(n)==False:
+								servicer.makeNodeMostRecent(n)
 
 			if not found:
 				print('Did not find')
-			print('Serving FindNode(<targetID>) request for <requesterID>')
+
 			servicer.PrintKBuckets()
 
 		# command: FIND_VALUE <key>
