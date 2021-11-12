@@ -124,10 +124,11 @@ def TestParse(filename):
 if __name__ == '__main__':
 
     # read in test filename
-    try:
-        filename = sys.argv[1]
-    except:
-        filename = sys.stdin.readline()
+    # try:
+    #     filename = sys.argv[1]
+    # except:
+    #     filename = sys.stdin.readline()
+    filename = 'hw3_all_scripts.txt'
 
     print(f'Reading in tests from file: {filename} ...')
     test_dict = TestParse(filename)
