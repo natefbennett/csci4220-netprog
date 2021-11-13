@@ -1,0 +1,43 @@
+Serving FindNode(0) request for 0
+Storing key 9 value "apples"
+Serving FindKey(9) request for 0
+Before FIND_VALUE command, k-buckets are:
+0:
+1:
+2:
+3: 0:9000
+Found data "apples" for key 9
+After FIND_VALUE command, k-buckets are:
+0:
+1:
+2:
+3: 0:9000
+Before FIND_VALUE command, k-buckets are:
+0:
+1:
+2:
+3: 0:9000
+Found value "carrots" for key 11
+After FIND_VALUE command, k-buckets are:
+0:
+1: 11:9002
+2:
+3: 0:9000
+Serving FindKey(9) request for 11
+Storing key 9 value "bananas"
+Serving FindKey(9) request for 11
+Before FIND_VALUE command, k-buckets are:
+0:
+1: 11:9002
+2:
+3: 0:9000
+Found data "bananas" for key 9
+After FIND_VALUE command, k-buckets are:
+0:
+1: 11:9002
+2:
+3: 0:9000
+Serving FindKey(9) request for 0
+Evicting quitting node 0 from bucket 3
+Letting 11 know I'm quitting.
+Shut down node 8

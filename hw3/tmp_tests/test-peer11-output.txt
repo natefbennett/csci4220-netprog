@@ -1,0 +1,33 @@
+After BOOTSTRAP(0), k-buckets are:
+0:
+1: 8:9001
+2:
+3: 0:9000
+Storing key 11 value "carrots"
+Serving FindKey(11) request for 8
+Before FIND_VALUE command, k-buckets are:
+0:
+1: 8:9001
+2:
+3: 0:9000
+Found value "apples" for key 9
+After FIND_VALUE command, k-buckets are:
+0:
+1: 8:9001
+2:
+3: 0:9000
+Storing key 9 at node 8
+Before FIND_VALUE command, k-buckets are:
+0:
+1: 8:9001
+2:
+3: 0:9000
+Found value "bananas" for key 9
+After FIND_VALUE command, k-buckets are:
+0:
+1: 8:9001
+2:
+3: 0:9000
+Evicting quitting node 0 from bucket 3
+Evicting quitting node 8 from bucket 1
+Shut down node 11

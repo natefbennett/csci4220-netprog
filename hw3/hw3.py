@@ -22,18 +22,13 @@ import csci4220_hw3_pb2_grpc as pb2_grpc
 class KadImplServicer(pb2_grpc.KadImplServicer):
 	"""Provides methods that implement functionality of a simple Kademlia server."""
 
-	# Member Variables
-	n = -1
-	k = -1
-	node = None  # this servers node info
-	k_buckets = []
-	hash_table = dict()
-
 	def __init__(self, n, k, id, addr, port):
 
 		# initialize k buckets
 		self.k = k
 		self.n = n
+		self.hash_table = dict()
+		self.k_buckets = []
 		for i in range(n):
 			self.k_buckets.append([])
 
@@ -50,7 +45,7 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		# print oldest to newest
 		for i, k_bucket in enumerate(self.k_buckets):
 			line = f'{i}:'
-			for node in reversed(k_bucket):
+			for node in k_bucket:
 				line += f' {node.id}:{node.port}'
 
 			print(line)
@@ -322,40 +317,75 @@ def run():
 			print('Before FIND_NODE command, k-buckets are:')
 			servicer.PrintKBuckets()
 
+			# # skip to output if local node_id matches requested node_id
+			# # ( acts as if it found a node )
+			# if node_id != servicer.node_id:
+			# 	pass
+			# contactedNodes = set()
+			# found = False
+
+		    #  	S = servicer.Get_k_closest(node_id)
+		    # 	for node in S:
+			# 	if node == node_id:
+			# 		found = True
+			# 	 	print('Found')
+			# 	    	break
+			# 	if node in contactedNodes:
+			# 	    	continue
+			# 	else:
+			# 	   	contactedNodes.add(node)
+			# 		R = node.FindNode(node_id)
+			# 		servicer.makeNodeMostRecent(node)
+
+			# 	    	for R_node in R:
+			# 			if R_node == node_id:
+			# 		    		found = True
+			# 		    		print('Found')
+			# 		    		break
+			# 			if servicer.SearchBucket(R_node)==False:
+			# 		    		servicer.makeNodeMostRecent(R_node)
+
+		    # 	if not found:
+			# 	print('Did not find')
+		    # 	print('Serving FindNode(<targetID>) request for <requesterID>')
+		    # 	servicer.PrintKBuckets()
+
+			found = False
+
 			# skip to output if local node_id matches requested node_id
 			# ( acts as if it found a node )
 			if node_id != servicer.node.id:
-				pass
-			contactedNodes = []
-			found = False
+				contactedNodes = []
+				found = False
 
-			S = servicer.Get_k_closest(node_id)
-			for node in S:
-				if node.id == node_id:
-					found = True
-					break
-				if node in contactedNodes:
-					continue
-				else:
-					contactedNodes.append(node)
-					# R = node.FindNode(node_id)
-					servicer.makeNodeMostRecent(node)
+				S = servicer.Get_k_closest(node_id)
+				for node in S:
+					if node.id == node_id:
+						found = True
+						break
+					if node in contactedNodes:
+						continue
+					else:
+						contactedNodes.append(node)
+						# R = node.FindNode(node_id)
+						servicer.makeNodeMostRecent(node)
 
-					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
-						stub = pb2_grpc.KadImplStub(channel)
+						with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
+							stub = pb2_grpc.KadImplStub(channel)
 
-						node_list = stub.FindNode(pb2.IDKey(
-							node  = servicer.node,
-							idkey = int(node_id)
-						))
+							node_list = stub.FindNode(pb2.IDKey(
+								node  = servicer.node,
+								idkey = int(node_id)
+							))
 
-						for n in node_list.nodes:
-							if n.id == node_id:
-								found = True
-								break
-							if servicer.SearchBuckets(n)==False:
-								servicer.makeNodeMostRecent(n)
-
+							for n in node_list.nodes:
+								if n.id == node_id:
+									found = True
+									break
+								if servicer.SearchBuckets(n)==False:
+									servicer.makeNodeMostRecent(n)
+			else: found = True
+			
 			if not found:
 				print(f'Could not find destination id {node_id}')
 			else:
@@ -487,9 +517,9 @@ def run():
 		elif cmd == 'QUIT':
 
 			# send a Quit RPC to each node that is in its k-buckets
-			for k_bucket in reversed(servicer.k_buckets):
+			for k_bucket in servicer.k_buckets:
 
-				for node in reversed(k_bucket):
+				for node in k_bucket:
 					# let stored node know that this node is quitting
 					with grpc.insecure_channel(f'{node.address}:{str(node.port)}') as channel:
 						stub = pb2_grpc.KadImplStub(channel)
