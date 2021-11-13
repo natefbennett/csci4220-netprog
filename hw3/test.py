@@ -181,9 +181,9 @@ if __name__ == '__main__':
                 peer_output.write(f'{line}\n')
 
         # create input files
-        with open(f'{folder_path}/{peer.id}-input.txt', 'w') as peer_input:
-            for line in peer.inputs:
-                peer_input.write(f'{line}\n')
+        # with open(f'{folder_path}/{peer.id}-input.txt', 'w') as peer_input:
+        #     for line in peer.inputs:
+        #         peer_input.write(f'{line}\n')
 
         # start process, apture process output
         print(f'Starting SimpleKad: {peer.invocation}') #DEBUG

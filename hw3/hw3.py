@@ -372,7 +372,7 @@ def run():
 				print('Usage: FIND_VALUE <key>')
 				continue
 
-			key = line.pop()
+			key = int(line.pop())
 
 			print('Before FIND_VALUE command, k-buckets are:')
 			servicer.PrintKBuckets()
@@ -384,9 +384,11 @@ def run():
 			# Otherwise the program should print:
 			# Could not find key <key>
 			closest = []
+			found = False
 
 			if servicer.hash_table.get(key)!=None:
 				value = servicer.hash_table.get(key)
+				found = True
 				print(f'Found data "{value}" for key {key}')
 			else:
 				# firsk = list()
