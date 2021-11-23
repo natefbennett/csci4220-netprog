@@ -111,7 +111,11 @@ class KadImplServicer(pb2_grpc.KadImplServicer):
 		[<older entry>, <next oldest>, ... ,<newest entry>]
 		"""
 		self.DeleteNode(node)
+		# print('DEBUG')
+		# self.PrintKBuckets()
 		self.AddNode(node)
+		# print('DEBUG')
+		# self.PrintKBuckets
 
 	def Get_k_closest(self, requested_id):
 		allNodes_with_distance = [] # [ <dist, node>, <dist, node>, ... ]
@@ -317,39 +321,6 @@ def run():
 			print('Before FIND_NODE command, k-buckets are:')
 			servicer.PrintKBuckets()
 
-			# # skip to output if local node_id matches requested node_id
-			# # ( acts as if it found a node )
-			# if node_id != servicer.node_id:
-			# 	pass
-			# contactedNodes = set()
-			# found = False
-
-		    #  	S = servicer.Get_k_closest(node_id)
-		    # 	for node in S:
-			# 	if node == node_id:
-			# 		found = True
-			# 	 	print('Found')
-			# 	    	break
-			# 	if node in contactedNodes:
-			# 	    	continue
-			# 	else:
-			# 	   	contactedNodes.add(node)
-			# 		R = node.FindNode(node_id)
-			# 		servicer.makeNodeMostRecent(node)
-
-			# 	    	for R_node in R:
-			# 			if R_node == node_id:
-			# 		    		found = True
-			# 		    		print('Found')
-			# 		    		break
-			# 			if servicer.SearchBucket(R_node)==False:
-			# 		    		servicer.makeNodeMostRecent(R_node)
-
-		    # 	if not found:
-			# 	print('Did not find')
-		    # 	print('Serving FindNode(<targetID>) request for <requesterID>')
-		    # 	servicer.PrintKBuckets()
-
 			found = False
 
 			# skip to output if local node_id matches requested node_id
@@ -452,6 +423,7 @@ def run():
 							if kv_node_wrapper.mode_kv:
 								print(f'Found value "{kv_node_wrapper.kv.value}" for key {kv_node_wrapper.kv.key}')
 								found = True
+								servicer.makeNodeMostRecent(kv_node_wrapper.responding_node)
 							# remote node has not been told to store key before
 							# get node list
 							else:
