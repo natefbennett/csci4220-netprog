@@ -13,6 +13,7 @@
 
 import sys
 import socket
+import select
 
 # sensor class to store the current state and send required messages
 class Sensor:
@@ -35,6 +36,9 @@ class Sensor:
 
 	def Disconnect(self):
 		self.c_sock.close()
+
+	def Listen(self):
+		self.c_sock.listen(5)
 
 	# offer optional perameters, incase there are no new coords to send
 	def UpdatePosition(self, new_x=-1, new_y=-1):
@@ -100,50 +104,68 @@ def run():
 
 	control_addr = socket.gethostbyname(control_addr)
 
-	# initialize object to manage server operations
+	# initialize object to manage sensor operations
 	sensor = Sensor(sensor_id, init_x_pos, init_y_pos, control_addr, control_port, sensor_range)
 
 	# connect to control server
 	sensor.Connect()
 
-	# TODO: send an UPDATEPOSITION message to control server
+	# send an UPDATEPOSITION message to control server
+	sensor.UpdatePosition()
 
-	# read form stdin for commands
-	for line in sys.stdin:
+	# listen for messages form control server
+	sensor.Listen()
+	inputs = [ sys.stdin, sensor.c_sock ]
 
-		line = line.split()
+	# accept inputs from control and stdin
+	while True:
+		ready = select.select(inputs, [], [])[0]
+		
+		# read form stdin for commands
+		if sys.stdin in ready:
+			line = sys.stdin.readline()
 
-		# user hit enter with no data
-		if line == []: 
-			PrintCommandMenu()
-			continue 
+			# check for exit
+			if not line:
+				break
 
-		cmd = line.pop(0)
+			line = line.split()
 
-		# command: MOVE [NewXPosition] [NewYPosition]
-		if cmd == 'MOVE':
-			# causes the sensor to update its location to the x-coordinate
-			# specified by [NewXPosition] and the y-coordinate specified by [NewYPosition].
-			# The sensor should also send an UPDATEPOSITION command to the server
-			pass
+			# user hit enter with no data
+			if line == []: 
+				PrintCommandMenu()
+				continue 
 
-		# command: SENDDATA [DestinationID]
-		elif cmd == 'SENDDATA':
-			# causes the sensor to generate a new DATAMESSAGE with a destination of
-			# [DestinationID]. The sensor should first send an UPDATEPOSITION message to the server to get an
-			# up-to-date list of reachable sensors and base stations.
-			pass
+			cmd = line.pop(0)
 
-		# command: WHERE [SensorID/BaseID]
-		elif cmd == 'WHERE':
-			# to get the location of a particular base station or sensor ID from the control
-			# server. It should not take any other actions until it gets a THERE message back from the server.
-			pass
+			# command: MOVE [NewXPosition] [NewYPosition]
+			if cmd == 'MOVE':
+				# causes the sensor to update its location to the x-coordinate
+				# specified by [NewXPosition] and the y-coordinate specified by [NewYPosition].
+				# The sensor should also send an UPDATEPOSITION command to the server
+				pass
 
-		# command: QUIT
-		elif cmd == 'QUIT':
-			# causes the client program to clean up any memory and any 
-			# sockets that are in use, and then terminate.
+			# command: SENDDATA [DestinationID]
+			elif cmd == 'SENDDATA':
+				# causes the sensor to generate a new DATAMESSAGE with a destination of
+				# [DestinationID]. The sensor should first send an UPDATEPOSITION message to the server to get an
+				# up-to-date list of reachable sensors and base stations.
+				pass
+
+			# command: WHERE [SensorID/BaseID]
+			elif cmd == 'WHERE':
+				# to get the location of a particular base station or sensor ID from the control
+				# server. It should not take any other actions until it gets a THERE message back from the server.
+				pass
+
+			# command: QUIT
+			elif cmd == 'QUIT':
+				# causes the client program to clean up any memory and any 
+				# sockets that are in use, and then terminate.
+				pass
+		
+		# read from control socket for messages
+		if sensor.c_sock in ready:
 			pass
 
 if __name__ == '__main__':

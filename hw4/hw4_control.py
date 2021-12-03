@@ -14,6 +14,12 @@
 import sys
 import socket 
 
+class BaseStation:
+	pass
+
+class Control:
+	pass
+
 def PrintCommandMenu():
 	print(
 		'Available Commands:\n' + \
@@ -29,6 +35,11 @@ def run():
 
 	control_port      = sys.argv[1]
 	base_station_file = sys.argv[2]
+
+	# parse base station file into BaseStation objects, 
+	# save BaseStations to list in Control object
+
+	# listen for stdin and for data from all sensor sockets
 
 	# read form stdin for commands
 	for line in sys.stdin:
