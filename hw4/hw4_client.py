@@ -91,7 +91,7 @@ def PrintCommandMenu():
 def run():
 
 	# check number of command line args
-	if len(sys.argv) != 4:
+	if len(sys.argv) != 7:
 		print(f'Usage: python3 -u {sys.argv[0]} [control address] [control port] [SensorID] [SensorRange] [InitialXPosition] [InitialYPosition]')
 		sys.exit(-1)
 
