@@ -15,10 +15,34 @@ import sys
 import socket 
 
 class BaseStation:
-	pass
+	
+	def __init__(self, id, x, y, num_links, links):
+		self.id        = id
+		self.num_links = num_links
+		self.x         = x
+		self.y         = y
+		self.links     = links
 
 class Control:
-	pass
+		
+	def __init__(self, port):
+		self.id            = 'control'
+		self.port          = port
+		self.sock          = None
+		self.base_stations = []
+
+	def ParseBaseStationFile(self, filename):
+		f = open(filename, 'r')
+		for line in f:
+			info      = line.split()
+			id        = info.pop(0)
+			x         = info.pop(0)
+			y         = info.pop(0)
+			num_links = line.pop(0)
+			self.base_stations.append(BaseStation(id, x, y, num_links, info))
+
+	def Listen(self):
+		self.sock.listen(10)
 
 def PrintCommandMenu():
 	print(
@@ -38,8 +62,11 @@ def run():
 
 	# parse base station file into BaseStation objects, 
 	# save BaseStations to list in Control object
+	control = Control(control_port)
+	control.ParseBaseStationFile(base_station_file)
 
 	# listen for stdin and for data from all sensor sockets
+	control.Listen()
 
 	# read form stdin for commands
 	for line in sys.stdin:

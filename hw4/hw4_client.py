@@ -38,7 +38,7 @@ class Sensor:
 		self.c_sock.close()
 
 	def Listen(self):
-		self.c_sock.listen(5)
+		self.c_sock.listen(1)
 
 	# offer optional perameters, incase there are no new coords to send
 	def UpdatePosition(self, new_x=-1, new_y=-1):
