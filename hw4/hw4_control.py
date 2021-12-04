@@ -11,6 +11,7 @@
 #
 # Usage:  python3 -u hw4_control.py [control port] [base station file]
 
+from os import remove
 import sys
 import socket 
 import select
@@ -46,6 +47,7 @@ class Control:
 	def Listen(self):
 		# create a TCP socket and listen on it
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # fix socket in use error
 		self.sock.bind(('',self.port))
 		self.sock.listen(10)
 
@@ -85,7 +87,7 @@ def run():
 			
 			# loop though ready file descriptors
 			for fd in ready:
-				print(fd)
+
 				# read form stdin for commands
 				if fd == sys.stdin:
 					line = sys.stdin.readline()
@@ -106,7 +108,19 @@ def run():
 				
 				# file descriptor (fd) is a sensor connection
 				else:
-					msg = fd.recv(1024)
+					msg = fd.recv(1024).decode('utf-8')
+					if msg:
+						# process sensor message
+						msg = msg.split()
+						cmd = msg.pop(0)
+
+						if cmd == 'UPDATEPOSITION':
+							resp = f'REACHABLE {1} {0}'
+							fd.sendall(resp.encode('utf8'))
+					# client connection ended 
+					else:
+						control.connections.remove(fd)
+						print('DEBUG: connection closed by sensor')
 
 if __name__ == '__main__':
 	run()

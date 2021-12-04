@@ -37,9 +37,6 @@ class Sensor:
 	def Disconnect(self):
 		self.c_sock.close()
 
-	def Listen(self):
-		self.c_sock.listen(1)
-
 	# offer optional perameters, incase there are no new coords to send
 	def UpdatePosition(self, new_x=-1, new_y=-1):
 		
@@ -47,7 +44,7 @@ class Sensor:
 		send_y = new_x
 
 		# if no position perameters passed, keep current position
-		if new_x != -1 and new_y != -1:
+		if new_x == -1 and new_y == -1:
 			send_x = self.x
 			send_y = self.y
 
@@ -60,9 +57,10 @@ class Sensor:
 
 		# sort the reachable list by their [SensorID]/[BaseID]
 		recv_list = recv_msg.split()
+		print(recv_list)
 		if recv_list.pop(0) == 'REACHABLE':
 			num_reachable = recv_list.pop(0)
-			recv_list = recv_list.sort()
+			recv_list.sort()
 
 			print(f'{self.id}: After reading REACHABLE message, I can see: {recv_list}')
 		else:
@@ -113,14 +111,11 @@ def run():
 	# send an UPDATEPOSITION message to control server
 	sensor.UpdatePosition()
 
-	# listen for messages form control server
-	sensor.Listen()
-	inputs = [ sys.stdin, sensor.c_sock ]
-
 	# accept inputs from control and stdin
+	inputs = [ sys.stdin, sensor.c_sock ]
 	while True:
 		ready = select.select(inputs, [], [])[0]
-		
+
 		# read form stdin for commands
 		if sys.stdin in ready:
 			line = sys.stdin.readline()
@@ -162,11 +157,14 @@ def run():
 			elif cmd == 'QUIT':
 				# causes the client program to clean up any memory and any 
 				# sockets that are in use, and then terminate.
-				pass
+				print('DEBUG: sensor closing connection to control')
+				sensor.c_sock.close()
+				break
 		
 		# read from control socket for messages
 		if sensor.c_sock in ready:
-			pass
+			msg = sensor.c_sock.recv(1024).decode('utf-8')
+
 
 if __name__ == '__main__':
 	run()
