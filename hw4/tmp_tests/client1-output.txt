@@ -1,4 +1,0 @@
-client1: After reading REACHABLE message, I can see: ['base_station_a', 'base_station_b', 'base_station_d', 'base_station_e']
-client1: After reading REACHABLE message, I can see: ['base_station_b', 'base_station_d', 'base_station_e']
-client1: After reading REACHABLE message, I can see: ['base_station_b', 'base_station_d', 'base_station_e']
-client1: Sent a new message bound for base_station_a.

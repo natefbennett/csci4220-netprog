@@ -1,0 +1,3 @@
+clientA: After reading REACHABLE message, I can see: base_station_d base_station_e
+DEBUG: control server closed connection
+DEBUG: sensor closing connection to control

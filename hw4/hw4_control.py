@@ -62,7 +62,7 @@ class Control:
 		self.port          = port
 		self.sock          = None
 		self.base_stations = []
-		self.connections   = dict() # file_descriptor -> SensorInfo
+		self.connections   = dict() # socket object -> SensorInfo
 
 	def ParseBaseStationFile(self, filename):
 		f = open(filename, 'r')
@@ -80,6 +80,13 @@ class Control:
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # fix socket in use error
 		self.sock.bind(('',self.port))
 		self.sock.listen(10)
+
+	# get a socket from an id
+	def GetSocket(self, id):
+		for sock, sensor in self.connections.items():
+			if sensor.id == id:
+				return sock
+		return None
 
 	# find a base station or sensor that matches passed id
 	def GetNode(self, id):
@@ -221,17 +228,24 @@ def run():
 							dest_id		 = msg.pop(0)
 							hop_list_len = int(msg.pop(0))
 							hop_list     = []
-
+							print(hop_list_len)
 							for i in range(hop_list_len):
 								hop_list.append(msg[i])
 
 							# [NextID] is a sensor’s ID 
 							# 		deliver the message to the destination
+							if next_id in [ sensor.id for sensor in control.connections.values() ]:
+								next_sock = control.GetSocket(id)
+								resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {hop_list}'
+								next_sock.sendall(resp.encode('utf8'))
+
 							# [NextID] is a base station
+							else:
+								pass
 							# 		base station id matches destination id
 							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
 							# 		all reachable sensors and base stations are already in hop list
-							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
+							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] could not be delivered')
 							# 		else send another DATAMESSAGE to next_id (base station), add base station id to hop list and get new next id
 							#			print(f'[BaseID]: Message from [OriginID] to [DestinationID] being forwarded through [BaseID]')
 							# 		if [OriginID] is the current base station, and the [NextID] and [DestinationID] match

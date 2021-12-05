@@ -66,8 +66,8 @@ class Sensor:
 			i = 0
 			while i < num_reachable*3:
 				reachable_dict[reachable_data[i]] = {   
-						  'x': reachable_data[i+1],
-						  'y': reachable_data[i+2] 
+						  'x': int(reachable_data[i+1]),
+						  'y': int(reachable_data[i+2]) 
 				}
 				i += 3 
 		
@@ -86,18 +86,17 @@ class Sensor:
 
 	# get euclidean distance from passed coordinates
 	def GetDistance(self, coordinates):
-		dx = (self.x - coordinates.x)
-		dy = (self.y - coordinates.y)
+		dx = (self.x - coordinates['x'])
+		dy = (self.y - coordinates['y'])
 		return math.sqrt(dx*dx + dy*dy)
 
 	def NextNodes(self):
 		# reachable nodes updated on last UpdatePostion call
 		# sort by euclidean distance, resolve ties by putting the 
 		# lexicographically smaller id first
-		sorted_reachable = self.reachable
 
 		tmp_list = []
-		for id, coords in self.reachable:
+		for id, coords in self.reachable.items():
 			dist = self.GetDistance(coords)
 			tmp_list.append((dist, id))
 
@@ -180,9 +179,9 @@ def run():
 	control_addr = sys.argv[1]      # address control server can be found
 	control_port = int(sys.argv[2]) # port control server can be found
 	sensor_id    = sys.argv[3]
-	sensor_range = sys.argv[4]
-	init_x_pos   = sys.argv[5]
-	init_y_pos   = sys.argv[6]
+	sensor_range = int(sys.argv[4])
+	init_x_pos   = int(sys.argv[5])
+	init_y_pos   = int(sys.argv[6])
 
 	control_addr = socket.gethostbyname(control_addr)
 
@@ -291,6 +290,7 @@ def run():
 
 			# server closed connection
 			else:
+				inputs.remove(sensor.c_sock)
 				print('DEBUG: control server closed connection')
 
 if __name__ == '__main__':

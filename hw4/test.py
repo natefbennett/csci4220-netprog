@@ -116,6 +116,7 @@ def TestParse(filename):
                     # or client
                     else: 
                         peer_id = cmd[3]
+                        cmd[1] = 'localhost'
                         cmd[0] = 'python3 -u hw4_client.py'
                     line = ' '.join(cmd)
                     

@@ -1,3 +1,7 @@
-base_station_b: Message from client1 to base_station_a being forwarded through base_station_b
-base_station_a: Message from client1 to base_station_a successfully received.
+base_station_d: Message from clientB to clientC being forwarded through base_station_d
+base_station_e: Message from clientB to clientC being forwarded through base_station_e
+base_station_f: Message from clientB to clientC being forwarded through base_station_f
+base_station_g: Message from clientB to clientC being forwarded through base_station_g
+base_station_h: Message from clientB to clientC being forwarded through base_station_h
+base_station_i: Message from clientB to clientC being forwarded through base_station_i
 
