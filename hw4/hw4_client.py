@@ -260,7 +260,6 @@ def run():
 
 				# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
 				if msg == 'DATAMESSAGE':
-					# TODO: see top of page 6 of the pdf for instructions
 					
 					orig_id		 = msg.pop(0)
 					next_id		 = msg.pop(0)

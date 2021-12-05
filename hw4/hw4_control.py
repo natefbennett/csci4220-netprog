@@ -95,7 +95,7 @@ class Control:
 
 	def Reachable(self, id):
 		reachable = []
-		req_node = self.GetSensorData(id) # get range data and more from requested sensor
+		req_node = self.GetNode(id) # get range data and more from requested sensor
 		
 		# control knows about requested sensor
 		if req_node != None:
@@ -159,10 +159,10 @@ def run():
 			ready = select.select(inputs, [], [])[0]
 
 			# loop though ready file descriptors
-			for fd in ready:
+			for sock in ready:
 
 				# read form stdin for commands
-				if fd == sys.stdin:
+				if sock == sys.stdin:
 					line = sys.stdin.readline()
 					line = line.split()
 
@@ -179,9 +179,9 @@ def run():
 						# sockets that are in use, and then terminate.
 						pass
 				
-				# file descriptor (fd) is a sensor connection
+				# socket is a sensor connection
 				else:
-					msg = fd.recv(1024).decode('utf-8')
+					msg = sock.recv(1024).decode('utf-8')
 					if msg:
 						# process sensor message
 						msg = msg.split()
@@ -204,7 +204,7 @@ def run():
 								reachable_str += ' '.join(map(str,node)) + ' '
 							# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
 							resp = f'REACHABLE {len(reachable)} {reachable_str}'
-							fd.sendall(resp.encode('utf8'))
+							sock.sendall(resp.encode('utf8'))
 
 						# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
 						if cmd == 'DATAMESSAGE':
@@ -220,11 +220,13 @@ def run():
 
 							# send response: THERE [NodeID] [XPosition] [YPosition]
 							resp = f'THERE {id} {x} {y}'
-							fd.sendall(resp.encode('utf8'))
+							sock.sendall(resp.encode('utf8'))
 
 					# client connection ended 
 					else:
-						del control.connections[fd]
+						del control.connections[sock]
+						inputs.remove(sock)
+						sock.close()
 						print('DEBUG: connection closed by sensor')
 
 if __name__ == '__main__':
