@@ -19,13 +19,14 @@ import select
 class Sensor:
 	
 	def __init__(self, id, x, y, c_addr, c_port, range):
-		self.id     = id
-		self.x      = x
-		self.y      = y
-		self.c_addr = c_addr
-		self.c_port = c_port
-		self.c_sock = None
-		self.range  = range
+		self.id        = id
+		self.x         = x
+		self.y         = y
+		self.c_addr    = c_addr
+		self.c_port    = c_port
+		self.c_sock    = None
+		self.range     = range
+		self.reachable = dict()
 
 	def Connect(self):
 		# Create the TCP socket, connect to the server
@@ -39,17 +40,14 @@ class Sensor:
 
 	# offer optional perameters, incase there are no new coords to send
 	def UpdatePosition(self, new_x=-1, new_y=-1):
-		
-		send_x = new_y
-		send_y = new_x
 
-		# if no position perameters passed, keep current position
-		if new_x == -1 and new_y == -1:
-			send_x = self.x
-			send_y = self.y
+		# position perameters passed, update sensor position
+		if new_x != -1 and new_y != -1:
+			self.x = new_x
+			self.y = new_y
 
 		# send message to control server
-		msg = f'UPDATEPOSITION {self.id} {self.range} {send_x} {send_y}'
+		msg = f'UPDATEPOSITION {self.id} {self.range} {self.x} {self.y}'
 		self.c_sock.sendall(msg.encode('utf-8'))
 
 		# wait for reachable message to be recieved
@@ -57,18 +55,41 @@ class Sensor:
 
 		# sort the reachable list by their [SensorID]/[BaseID]
 		recv_list = recv_msg.split()
-		print(recv_list)
-		if recv_list.pop(0) == 'REACHABLE':
-			num_reachable = recv_list.pop(0)
-			recv_list.sort()
 
-			print(f'{self.id}: After reading REACHABLE message, I can see: {recv_list}')
-		else:
-			# wrong message received
+		if recv_list.pop(0) == 'REACHABLE':
+
+			# convert recieved data to list
+			num_reachable  = int(recv_list.pop(0))
+			reachable_data = recv_list
+			reachable_dict = dict()
+			i = 0
+			while i < num_reachable*3:
+				reachable_dict[reachable_data[i]] = {   
+						  'x': reachable_data[i+1],
+						  'y': reachable_data[i+2] 
+				}
+				i += 3 
+		
+			# update this sensors reachable dictionary
+			self.reachable = reachable_dict
+
+			# build string from sorted list of base station and sensor ids
+			reachable_ids = list(self.reachable.keys())
+			reachable_ids.sort()
+			reachable_str = ' '.join(reachable_ids)
+		
+			print(f'{self.id}: After reading REACHABLE message, I can see: {reachable_str}')
+		
+		# wrong message received
+		else:	
 			pass
 		
 	def SendDataMessage(self, dest_id):
-		# self.c_sock.sendall(send_string.encode('utf-8'))
+		next_id = None # find where to send
+		hop_list = []  # ??
+		# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
+		msg = f'DATAMESSAGE {self.id} {next_id} {dest_id} {len(hop_list)} {hop_list}'
+		self.c_sock.sendall(msg.encode('utf-8'))
 		# get the response from the server
     	# recv_string = self.c_sock.recv(1024)
 		pass
@@ -135,17 +156,22 @@ def run():
 
 			# command: MOVE [NewXPosition] [NewYPosition]
 			if cmd == 'MOVE':
-				# causes the sensor to update its location to the x-coordinate
-				# specified by [NewXPosition] and the y-coordinate specified by [NewYPosition].
-				# The sensor should also send an UPDATEPOSITION command to the server
-				pass
+				# sensor updates its location to the x-coordinate [NewXPosition]
+				# and the y-coordinate specified by [NewYPosition].
+				# send an UPDATEPOSITION command to the server
+				new_x = line.pop(0)
+				new_y = line.pop(0)
+				sensor.UpdatePosition(new_x, new_y)
 
 			# command: SENDDATA [DestinationID]
 			elif cmd == 'SENDDATA':
-				# causes the sensor to generate a new DATAMESSAGE with a destination of
-				# [DestinationID]. The sensor should first send an UPDATEPOSITION message to the server to get an
+				# first send an UPDATEPOSITION message to the server to get an
 				# up-to-date list of reachable sensors and base stations.
-				pass
+				sensor.UpdatePosition()
+
+				# sensor generates a new DATAMESSAGE with a destination [DestinationID]
+				dest_id = line.pop(0)
+				sensor.SendDataMessage(dest_id)
 
 			# command: WHERE [SensorID/BaseID]
 			elif cmd == 'WHERE':
