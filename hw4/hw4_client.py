@@ -14,6 +14,7 @@
 import sys
 import socket
 import select
+import math
 
 # sensor class to store the current state and send required messages
 class Sensor:
@@ -38,7 +39,7 @@ class Sensor:
 	def Disconnect(self):
 		self.c_sock.close()
 
-	# offer optional perameters, incase there are no new coords to send
+	# offer optional perameters, incase there are no new coords
 	def UpdatePosition(self, new_x=-1, new_y=-1):
 
 		# position perameters passed, update sensor position
@@ -80,23 +81,85 @@ class Sensor:
 		
 			print(f'{self.id}: After reading REACHABLE message, I can see: {reachable_str}')
 		
-		# wrong message received
-		else:	
+		else: # wrong message received
 			pass
+
+	# get euclidean distance from passed coordinates
+	def GetDistance(self, coordinates):
+		dx = (self.x - coordinates.x)
+		dy = (self.y - coordinates.y)
+		return math.sqrt(dx*dx + dy*dy)
+
+	def NextNodes(self):
+		# reachable nodes updated on last UpdatePostion call
+		# sort by euclidean distance, resolve ties by putting the 
+		# lexicographically smaller id first
+		sorted_reachable = self.reachable
+
+		tmp_list = []
+		for id, coords in self.reachable:
+			dist = self.GetDistance(coords)
+			tmp_list.append((dist, id))
+
+		# sort temp list and pull ids only out
+		tmp_list.sort()
+		sorted_reachable = [tmp[1] for tmp in tmp_list]
+
+		return sorted_reachable
 		
-	def SendDataMessage(self, dest_id):
-		next_id = None # find where to send
-		hop_list = []  # ??
-		# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
-		msg = f'DATAMESSAGE {self.id} {next_id} {dest_id} {len(hop_list)} {hop_list}'
+	def SendDataMessage(self, dest_id, orig_id=None, hop_list=[]):
+		next_nodes = self.NextNodes()
+		next_id = None
+		hop_list.append(self.id)
+
+		if orig_id == None:
+			orig_id = self.id
+
+		# destination is reachable, send there next
+		if dest_id in next_nodes:
+			next_id = dest_id
+		else:
+			# find next node that isnt already in hop list
+			for id in next_nodes:
+				if id not in hop_list:
+					next_id = id
+					break
+
+		# all reachable nodes are already in the hop list
+		if next_id == None:
+			print('{sensor.id}: Message from {orig_id} to {dest_id} could not be delivered')
+			return
+		
+		# send: DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
+		msg = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {len(hop_list)} {hop_list}'
 		self.c_sock.sendall(msg.encode('utf-8'))
-		# get the response from the server
-    	# recv_string = self.c_sock.recv(1024)
-		pass
 
-	def Where(self, id):
-		pass
+		# started from this sensor
+		if orig_id == self.id:
+			if next_id == dest_id:
+				print(f'{self.id}: Sent a new message directly to {dest_id}')
+			else:
+				print(f'{self.id}: Sent a new message bound for {dest_id}')
+		else:
+			print(f'{self.id}: Message from {orig_id} to {dest_id} being forwarded through {self.id}')
 
+	# ask control server for coordinates of given id
+	# wait until THERE message recieved 
+	def SendWhere(self, id):
+		# WHERE [SensorID/BaseID] 
+		msg = f'WHERE {id}'
+		self.c_sock.sendall(msg.encode('utf-8'))
+
+		# wait for THERE message to be recieved
+		recv_msg = self.c_sock.recv(1024).decode('utf-8')
+		recv_list = recv_msg.split()
+
+		# update reachable list
+		if recv_list.pop(0) == 'THERE':
+			recv_id, recv_x, recv_y = recv_list
+			self.reachable[recv_id] = {int(recv_x), int(recv_y)}
+		else:
+			print(f'DEBUG: wrong message recieved in Sensor.SendWhere(id={id})')
 
 def PrintCommandMenu():
 	print(
@@ -175,9 +238,9 @@ def run():
 
 			# command: WHERE [SensorID/BaseID]
 			elif cmd == 'WHERE':
-				# to get the location of a particular base station or sensor ID from the control
-				# server. It should not take any other actions until it gets a THERE message back from the server.
-				pass
+				id = int(cmd.pop(0))
+				# ask control server for coords of id
+				sensor.SendWhere(id)
 
 			# command: QUIT
 			elif cmd == 'QUIT':
@@ -190,7 +253,42 @@ def run():
 		# read from control socket for messages
 		if sensor.c_sock in ready:
 			msg = sensor.c_sock.recv(1024).decode('utf-8')
+			# process sensor message
+			if msg:				
+				msg = msg.split()
+				cmd = msg.pop(0)
 
+				# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
+				if msg == 'DATAMESSAGE':
+					# TODO: see top of page 6 of the pdf for instructions
+					
+					orig_id		 = msg.pop(0)
+					next_id		 = msg.pop(0)
+					dest_id		 = msg.pop(0)
+					hop_list_len = int(msg.pop(0))
+					hop_list     = []
+
+					for i in range(hop_list_len):
+						hop_list.append(msg[i])
+
+					# message has reached destination
+					if sensor.id == dest_id:
+						print(f'{sensor.id}: Message from {orig_id} to {dest_id} succesfully received')
+					
+					# send another DATAMESSAGE to next node
+					else:
+						# get an updated list of reachable sensors and base stations
+						sensor.UpdatePosition()
+
+						# send a WHERE message to control to find the position of destination id
+						sensor.SendWhere(dest_id)
+
+						# attempt to forward message to next node
+						sensor.SendDataMessage(dest_id, orig_id, hop_list)
+
+			# server closed connection
+			else:
+				print('DEBUG: control server closed connection')
 
 if __name__ == '__main__':
 	run()

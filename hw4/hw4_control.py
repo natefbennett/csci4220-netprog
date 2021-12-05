@@ -40,6 +40,7 @@ class SensorInfo(Node):
 		self.y     = -1
 		self.range = -1
 		self.addr  = addr
+		self.type  = 'sensor'
 
 class BaseStation(Node):
 	
@@ -50,6 +51,7 @@ class BaseStation(Node):
 		self.y         = y
 		self.links     = links
 		self.range     = float('inf')
+		self.type      = 'base_station'
 
 class Control:
 		
@@ -77,37 +79,49 @@ class Control:
 		self.sock.bind(('',self.port))
 		self.sock.listen(10)
 
-	# find connected sensor that matches passed id
-	def GetSensorData(self, sensor_id):
+	# find a base station or sensor that matches passed id
+	def GetNode(self, id):
+		# check sensors
 		for sensor in self.connections.values():
-			if sensor.id == sensor_id:
+			if sensor.id == id:
 				return sensor
+
+		# check base stations
+		for base_station in self.base_stations:
+			if base_station.id == id:
+				return base_station
+
 		return None
 
-	def Reachable(self, sensor_id):
+	def Reachable(self, id):
 		reachable = []
-		req_sensor = self.GetSensorData(sensor_id) # get range data and more from requested sensor
+		req_node = self.GetSensorData(id) # get range data and more from requested sensor
 		
 		# control knows about requested sensor
-		if req_sensor != None:
+		if req_node != None:
 			# loop through sensors and store all in range
 			for sensor in self.connections.values():
-				in_range, dist = req_sensor.InRange(sensor)
-				if in_range and sensor.id != sensor_id:
+				in_range, dist = req_node.InRange(sensor)
+				if in_range and sensor.id != id:
 					reachable.append([sensor.id, sensor.x, sensor.y])
 
 			# loop though base stations
-			for base in self.base_stations:
-				in_range, dist = req_sensor.InRange(base)
-				if in_range and base.id != sensor_id:
-					reachable.append([base.id, base.x, base.y])
+			for base_station in self.base_stations:
+				in_range, dist = req_node.InRange(base_station)
+				if in_range and base_station.id != id:
+					reachable.append([base_station.id, base_station.x, base_station.y])
 
 		# no sensor found with given id
 		else:
-			print('DEBUG: error in Reachable(sensor_id={sensor_id}) sensor not found')
+			print('DEBUG: error in Reachable(id={id}) node not found')
 		
 		# return [[[ID] [XPosition] [YPosition]], [...], ...]
 		return reachable
+
+	# lookup position of a base station or sensor
+	def Where(self, id):
+		node = self.GetNode(id)
+		return (node.x, node.y)
 
 def PrintCommandMenu():
 	print(
@@ -173,6 +187,7 @@ def run():
 						msg = msg.split()
 						cmd = msg.pop(0)
 
+						# UPDATEPOSITION [SensorID] [SensorRange] [CurrentXPosition] [CurrentYPosition]
 						if cmd == 'UPDATEPOSITION':
 							id, range, x, y = msg
 
@@ -189,6 +204,22 @@ def run():
 								reachable_str += ' '.join(map(str,node)) + ' '
 							# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
 							resp = f'REACHABLE {len(reachable)} {reachable_str}'
+							fd.sendall(resp.encode('utf8'))
+
+						# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
+						if cmd == 'DATAMESSAGE':
+							# [NextID] is a sensor’s ID deliver the message to the destination
+							# [NextID] is a base station
+							# see bottom of page 4 and top of 5 for actions
+							pass
+
+						# WHERE [SensorID/BaseID] 
+						if cmd == 'WHERE':
+							id = int(msg.pop(0))
+							x, y = control.Where(id)
+
+							# send response: THERE [NodeID] [XPosition] [YPosition]
+							resp = f'THERE {id} {x} {y}'
 							fd.sendall(resp.encode('utf8'))
 
 					# client connection ended 
