@@ -26,9 +26,11 @@ class Node:
 		dy = (self.y - other_node.y)
 		return math.sqrt(dx*dx + dy*dy)
 
+	# sensors can only send or receive messages if both
+	# the sender and receiver can reach each other
 	def InRange(self, other_node):
 		distance = self.GetDistance(other_node)
-		if distance <= self.range:
+		if distance <= self.range and distance <= other_node.range:
 			return (True, distance)
 		return (False, distance)
 
@@ -175,9 +177,13 @@ def run():
 
 					# command: QUIT
 					if cmd == 'QUIT':
-						# causes the client program to clean up any memory and any 
+						# causes the server program to clean up any memory and any 
 						# sockets that are in use, and then terminate.
-						pass
+						for active_sock in inputs: 
+							inputs.remove(active_sock)
+							active_sock.close()
+
+						sys.exit(0)
 				
 				# socket is a sensor connection
 				else:
@@ -208,10 +214,30 @@ def run():
 
 						# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
 						if cmd == 'DATAMESSAGE':
-							# [NextID] is a sensor’s ID deliver the message to the destination
+							# TODO: implement base station behavior
+							# ** see bottom of page 4 and top of 5 for actions **
+							orig_id		 = msg.pop(0)
+							next_id		 = msg.pop(0)
+							dest_id		 = msg.pop(0)
+							hop_list_len = int(msg.pop(0))
+							hop_list     = []
+
+							for i in range(hop_list_len):
+								hop_list.append(msg[i])
+
+							# [NextID] is a sensor’s ID 
+							# 		deliver the message to the destination
 							# [NextID] is a base station
-							# see bottom of page 4 and top of 5 for actions
-							pass
+							# 		base station id matches destination id
+							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
+							# 		all reachable sensors and base stations are already in hop list
+							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
+							# 		else send another DATAMESSAGE to next_id (base station), add base station id to hop list and get new next id
+							#			print(f'[BaseID]: Message from [OriginID] to [DestinationID] being forwarded through [BaseID]')
+							# 		if [OriginID] is the current base station, and the [NextID] and [DestinationID] match
+							# 			print(f'[BaseID]: Sent a new message directly to [DestinationID]')
+							#		else if the [OriginID] is the current base station
+							# 			print(f'[BaseID]: Sent a new message bound for [DestinationID]')
 
 						# WHERE [SensorID/BaseID] 
 						if cmd == 'WHERE':

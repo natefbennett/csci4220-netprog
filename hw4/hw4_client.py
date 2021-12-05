@@ -249,6 +249,10 @@ def run():
 				print('DEBUG: sensor closing connection to control')
 				sensor.c_sock.close()
 				break
+			
+			# command not recognized  
+			else:
+				PrintCommandMenu()
 		
 		# read from control socket for messages
 		if sensor.c_sock in ready:
