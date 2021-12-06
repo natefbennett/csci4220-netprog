@@ -1,0 +1,2 @@
+base_station_a: Message from client1 to base_station_a successfully received.
+

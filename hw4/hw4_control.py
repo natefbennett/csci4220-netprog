@@ -123,11 +123,18 @@ class Control:
 				if in_range and sensor.id != id:
 					reachable.append([sensor.id, sensor.x, sensor.y])
 
-			# loop though base stations
-			for base_station in self.base_stations:
-				in_range, dist = req_node.InRange(base_station)
-				if in_range and base_station.id != id:
+			# base station asking, only give directly connected base stations
+			if req_node.type == 'base_station':
+				for base_station in req_node.links:
 					reachable.append([base_station.id, base_station.x, base_station.y])
+
+			# sensor looking for reachable base stations
+			else:
+				# loop though base stations
+				for base_station in self.base_stations:
+					in_range, dist = req_node.InRange(base_station)
+					if in_range and base_station.id != id:
+						reachable.append([base_station.id, base_station.x, base_station.y])
 
 		# no sensor found with given id
 		else:
@@ -140,6 +147,71 @@ class Control:
 	def Where(self, id):
 		node = self.GetNode(id)
 		return (node.x, node.y)
+
+	def NextNodes(self, id):
+		tmp_list = []
+		for node_data in self.Reachable(id):
+			cur_id, cur_x, cur_y = node_data
+			dist = self.GetDistance(self.GetNode(cur_id))
+			tmp_list.append((dist, cur_id))
+
+		# sort temp list and pull ids only out
+		tmp_list.sort()
+		sorted_reachable = [tmp[1] for tmp in tmp_list]
+
+		return sorted_reachable
+
+	def BaseStationForwarder(self, next_id, orig_id, dest_id, hop_list):
+		
+		# find base station with id NextID
+		for base_station in self.base_stations:
+			if next_id == base_station.id:
+				# message has reached destination base station
+				if base_station.id == dest_id:
+					print(f'{base_station.id}: Message from {orig_id} to {dest_id} succesfully received.')
+				else:
+					next_nodes = self.NextNodes()
+					n_next_id = None
+					hop_list.append(self.id)
+					
+					# destination is reachable, send there next
+					if dest_id in next_nodes:
+						n_next_id = dest_id
+					else:
+						# find next node that isnt already in hop list
+						for id in next_nodes:
+							if id not in hop_list:
+								n_next_id = id
+								break
+
+					# all reachable sensors and base stations are already in hop list
+					if n_next_id == None:
+						print(f'{base_station.id}: Message from {orig_id} to {dest_id} could not be delivered')
+						return
+					
+					# check if we are sending to a sensor or a base station
+					internal = True
+					# if sensor send to socket
+					if self.GetNode(n_next_id).type == 'sensor':
+						msg = f'DATAMESSAGE {orig_id} {n_next_id} {dest_id} {len(hop_list)} {hop_list}'
+						self.GetSocket(n_next_id).sendall(msg.encode('utf-8'))
+						internal = False
+
+					# started from this sensor
+					if orig_id == base_station.id:
+						if n_next_id == dest_id:
+							print(f'{base_station.id}: Sent a new message directly to {dest_id}.')
+						else:
+							print(f'{base_station.id}: Sent a new message bound for {dest_id}.')
+					else:
+						print(f'{base_station.id}: Message from {orig_id} to {dest_id} being forwarded through {self.id}')
+
+					# if sending to base station, call function recursivly 
+					if internal:
+						self.BaseStationForwarder(n_next_id, orig_id, dest_id, hop_list)
+
+				break
+		
 
 def PrintCommandMenu():
 	print(
@@ -231,7 +303,7 @@ def run():
 						sock.sendall(resp.encode('utf8'))
 
 					# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
-					if cmd == 'DATAMESSAGE':
+					elif cmd == 'DATAMESSAGE':
 						# TODO: implement base station behavior
 						# ** see bottom of page 4 and top of 5 for actions **
 						orig_id		 = msg.pop(0)
@@ -239,12 +311,12 @@ def run():
 						dest_id		 = msg.pop(0)
 						hop_list_len = int(msg.pop(0))
 						hop_list     = []
-
+						msg = msg[0]
 						for i in range(hop_list_len):
 							hop_list.append(msg[i])
 
 						# [NextID] is a sensor’s ID 
-						# 		deliver the message to the destination
+						# deliver the message to the destination
 						if next_id in [ sensor.id for sensor in control.connections.values() ]:
 							next_sock = control.GetSocket(id)
 							resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {hop_list}'
@@ -252,20 +324,10 @@ def run():
 
 						# [NextID] is a base station
 						else:
-							pass
-						# 		base station id matches destination id
-						# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
-						# 		all reachable sensors and base stations are already in hop list
-						# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] could not be delivered')
-						# 		else send another DATAMESSAGE to next_id (base station), add base station id to hop list and get new next id
-						#			print(f'[BaseID]: Message from [OriginID] to [DestinationID] being forwarded through [BaseID]')
-						# 		if [OriginID] is the current base station, and the [NextID] and [DestinationID] match
-						# 			print(f'[BaseID]: Sent a new message directly to [DestinationID]')
-						#		else if the [OriginID] is the current base station
-						# 			print(f'[BaseID]: Sent a new message bound for [DestinationID]')
-
+							control.BaseStationForwarder(next_id, orig_id, dest_id, hop_list)
+									
 					# WHERE [SensorID/BaseID] 
-					if cmd == 'WHERE':
+					elif cmd == 'WHERE':
 						id = int(msg.pop(0))
 						x, y = control.Where(id)
 
