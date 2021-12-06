@@ -77,9 +77,8 @@ class Sensor:
 			# build string from sorted list of base station and sensor ids
 			reachable_ids = list(self.reachable.keys())
 			reachable_ids.sort()
-			reachable_str = ' '.join(reachable_ids)
 		
-			print(f'{self.id}: After reading REACHABLE message, I can see: {reachable_str}')
+			print(f'{self.id}: After reading REACHABLE message, I can see: {reachable_ids}')
 		
 		else: # wrong message received
 			pass
@@ -221,8 +220,8 @@ def run():
 				# sensor updates its location to the x-coordinate [NewXPosition]
 				# and the y-coordinate specified by [NewYPosition].
 				# send an UPDATEPOSITION command to the server
-				new_x = line.pop(0)
-				new_y = line.pop(0)
+				new_x = int(line.pop(0))
+				new_y = int(line.pop(0))
 				sensor.UpdatePosition(new_x, new_y)
 
 			# command: SENDDATA [DestinationID]
@@ -270,12 +269,12 @@ def run():
 					hop_list_len = int(msg.pop(0))
 					hop_list     = []
 
-					for i in range(hop_list_len):
-						hop_list.append(msg[i])
+					for hop in msg:
+						hop_list.append(hop)
 
 					# message has reached destination
 					if sensor.id == dest_id:
-						print(f'{sensor.id}: Message from {orig_id} to {dest_id} succesfully received.')
+						print(f'{sensor.id}: Message from {orig_id} to {dest_id} successfully received.')
 					
 					# send another DATAMESSAGE to next node
 					else:

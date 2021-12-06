@@ -125,7 +125,8 @@ class Control:
 
 			# base station asking, only give directly connected base stations
 			if req_node.type == 'base_station':
-				for base_station in req_node.links:
+				for base_station_id in req_node.links:
+					base_station = self.GetNode(base_station_id)
 					reachable.append([base_station.id, base_station.x, base_station.y])
 
 			# sensor looking for reachable base stations
@@ -152,7 +153,7 @@ class Control:
 		tmp_list = []
 		for node_data in self.Reachable(id):
 			cur_id, cur_x, cur_y = node_data
-			dist = self.GetDistance(self.GetNode(cur_id))
+			dist = self.GetNode(id).GetDistance(self.GetNode(cur_id))
 			tmp_list.append((dist, cur_id))
 
 		# sort temp list and pull ids only out
@@ -168,9 +169,9 @@ class Control:
 			if next_id == base_station.id:
 				# message has reached destination base station
 				if base_station.id == dest_id:
-					print(f'{base_station.id}: Message from {orig_id} to {dest_id} succesfully received.')
+					print(f'{base_station.id}: Message from {orig_id} to {dest_id} successfully received.')
 				else:
-					next_nodes = self.NextNodes()
+					next_nodes = self.NextNodes(base_station.id)
 					n_next_id = None
 					hop_list.append(self.id)
 					
@@ -297,23 +298,23 @@ def run():
 						reachable = control.Reachable(id)
 						reachable_str = ''
 						for node in reachable:
-							reachable_str += ' '.join(map(str,node)) + ' '
+							reachable_str += ' '.join(map(str, node)) + ' '
+
 						# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
 						resp = f'REACHABLE {len(reachable)} {reachable_str}'
 						sock.sendall(resp.encode('utf8'))
 
 					# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
 					elif cmd == 'DATAMESSAGE':
-						# TODO: implement base station behavior
-						# ** see bottom of page 4 and top of 5 for actions **
+
 						orig_id		 = msg.pop(0)
 						next_id		 = msg.pop(0)
 						dest_id		 = msg.pop(0)
 						hop_list_len = int(msg.pop(0))
 						hop_list     = []
-						msg = msg[0]
-						for i in range(hop_list_len):
-							hop_list.append(msg[i])
+
+						for hop in msg:
+							hop_list.append(hop)
 
 						# [NextID] is a sensor’s ID 
 						# deliver the message to the destination
