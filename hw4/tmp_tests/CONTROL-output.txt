@@ -1,0 +1,3 @@
+base_station_e: Message from client2 to base_station_a being forwarded through base_station_e
+base_station_a: Message from client2 to base_station_a successfully received.
+

@@ -28,6 +28,7 @@ class Sensor:
 		self.c_sock    = None
 		self.range     = range
 		self.reachable = dict()
+		self.known     = dict() # holds nodes that not reachable but known
 
 	def Connect(self):
 		# Create the TCP socket, connect to the server
@@ -84,19 +85,35 @@ class Sensor:
 			pass
 
 	# get euclidean distance from passed coordinates
-	def GetDistance(self, coordinates):
-		dx = (self.x - coordinates['x'])
-		dy = (self.y - coordinates['y'])
+	def GetDistance(self, x1, y1, x2, y2):
+		dx = (x1 - x2)
+		dy = (y1 - y2)
 		return math.sqrt(dx*dx + dy*dy)
 
-	def NextNodes(self):
+	def GetCoordinates(self, id):
+		found = False
+		for node_id, node_coords in self.reachable.items():
+			if node_id == id:
+				return node_coords['x'], node_coords['y']
+				found = True
+				break
+		if not found:
+			for node_id, node_coords in self.known.items():
+				if node_id == id:
+					return node_coords['x'], node_coords['y']
+					found = True
+					break
+
+	def NextNodes(self, dest_id):
 		# reachable nodes updated on last UpdatePostion call
 		# sort by euclidean distance, resolve ties by putting the 
 		# lexicographically smaller id first
-
+		dest_x, dest_y = self.GetCoordinates(dest_id)
 		tmp_list = []
+		
 		for id, coords in self.reachable.items():
-			dist = self.GetDistance(coords)
+			# get distance in regards to destination
+			dist = self.GetDistance(dest_x, dest_y, coords['x'], coords['y'])
 			tmp_list.append((dist, id))
 
 		# sort temp list and pull ids only out
@@ -106,7 +123,7 @@ class Sensor:
 		return sorted_reachable
 		
 	def SendDataMessage(self, dest_id, orig_id=None, hop_list=[]):
-		next_nodes = self.NextNodes()
+		next_nodes = self.NextNodes(dest_id)
 		next_id = None
 		hop_list.append(self.id)
 
@@ -129,7 +146,7 @@ class Sensor:
 			return
 		
 		# send: DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
-		msg = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {len(hop_list)} {hop_list}'
+		msg = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {len(hop_list)} {" ".join(hop_list)}'
 		self.c_sock.sendall(msg.encode('utf-8'))
 
 		# started from this sensor
@@ -155,7 +172,10 @@ class Sensor:
 		# update reachable list
 		if recv_list.pop(0) == 'THERE':
 			recv_id, recv_x, recv_y = recv_list
-			self.reachable[recv_id] = {int(recv_x), int(recv_y)}
+			self.known[recv_id] = {'x':int(recv_x), 'y':int(recv_y)}
+			# also update reachable if was saved there before
+			if recv_id in self.reachable.keys():
+				self.known[recv_id] = {'x':int(recv_x), 'y':int(recv_y)}
 		else:
 			print(f'DEBUG: wrong message recieved in Sensor.SendWhere(id={id})')
 
@@ -226,17 +246,18 @@ def run():
 
 			# command: SENDDATA [DestinationID]
 			elif cmd == 'SENDDATA':
+				dest_id = line.pop(0)
+
 				# first send an UPDATEPOSITION message to the server to get an
 				# up-to-date list of reachable sensors and base stations.
 				sensor.UpdatePosition()
-
+				sensor.SendWhere(dest_id)
 				# sensor generates a new DATAMESSAGE with a destination [DestinationID]
-				dest_id = line.pop(0)
 				sensor.SendDataMessage(dest_id)
 
 			# command: WHERE [SensorID/BaseID]
 			elif cmd == 'WHERE':
-				id = int(cmd.pop(0))
+				id = cmd.pop(0)
 				# ask control server for coords of id
 				sensor.SendWhere(id)
 

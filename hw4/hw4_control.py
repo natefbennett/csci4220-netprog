@@ -149,11 +149,11 @@ class Control:
 		node = self.GetNode(id)
 		return (node.x, node.y)
 
-	def NextNodes(self, id):
+	def NextNodes(self, id, dest_id):
 		tmp_list = []
 		for node_data in self.Reachable(id):
 			cur_id, cur_x, cur_y = node_data
-			dist = self.GetNode(id).GetDistance(self.GetNode(cur_id))
+			dist = self.GetNode(dest_id).GetDistance(self.GetNode(dest_id)) # distance form destination node
 			tmp_list.append((dist, cur_id))
 
 		# sort temp list and pull ids only out
@@ -171,10 +171,10 @@ class Control:
 				if base_station.id == dest_id:
 					print(f'{base_station.id}: Message from {orig_id} to {dest_id} successfully received.')
 				else:
-					next_nodes = self.NextNodes(base_station.id)
+					next_nodes = self.NextNodes(base_station.id, dest_id)
 					n_next_id = None
-					hop_list.append(self.id)
-					
+					hop_list.append(base_station.id)
+
 					# destination is reachable, send there next
 					if dest_id in next_nodes:
 						n_next_id = dest_id
@@ -205,7 +205,7 @@ class Control:
 						else:
 							print(f'{base_station.id}: Sent a new message bound for {dest_id}.')
 					else:
-						print(f'{base_station.id}: Message from {orig_id} to {dest_id} being forwarded through {self.id}')
+						print(f'{base_station.id}: Message from {orig_id} to {dest_id} being forwarded through {base_station.id}')
 
 					# if sending to base station, call function recursivly 
 					if internal:
@@ -320,7 +320,7 @@ def run():
 						# deliver the message to the destination
 						if next_id in [ sensor.id for sensor in control.connections.values() ]:
 							next_sock = control.GetSocket(id)
-							resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {hop_list}'
+							resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {" ".join(hop_list)}'
 							next_sock.sendall(resp.encode('utf8'))
 
 						# [NextID] is a base station
@@ -329,7 +329,7 @@ def run():
 									
 					# WHERE [SensorID/BaseID] 
 					elif cmd == 'WHERE':
-						id = int(msg.pop(0))
+						id = msg.pop(0)
 						x, y = control.Where(id)
 
 						# send response: THERE [NodeID] [XPosition] [YPosition]

@@ -1,3 +1,1 @@
-client1: After reading REACHABLE message, I can see: []
-client1: After reading REACHABLE message, I can see: []
-client1: Message from client1 to base_station_h could not be delivered.
+client1: After reading REACHABLE message, I can see: ['base_station_a', 'base_station_b', 'base_station_d', 'base_station_e']
