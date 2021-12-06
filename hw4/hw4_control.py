@@ -11,6 +11,9 @@
 #
 # Usage:  python3 -u hw4_control.py [control port] [base station file]
 
+# multi connections without threading reference
+# https://stackoverflow.com/questions/5308080/python-socket-accept-nonblocking
+
 from os import remove
 import sys
 import socket 
@@ -80,6 +83,12 @@ class Control:
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # fix socket in use error
 		self.sock.bind(('',self.port))
 		self.sock.listen(10)
+		# self.sock.setblocking(0)
+		# self.sock.settimeout(1)
+
+	def Accept(self):
+		client_sock, client_addr = self.sock.accept() # returns (socket, address)
+		self.connections[client_sock] = SensorInfo(client_addr)
 
 	# get a socket from an id
 	def GetSocket(self, id):
@@ -158,116 +167,118 @@ def run():
 
 	# server loop, accept incoming connections
 	while True:
-		client_sock, client_addr = control.sock.accept() # returns (socket, address)
-		control.connections[client_sock] = SensorInfo(client_addr)
+
+		inputs = [ sys.stdin, control.sock ] + list(control.connections.keys())
+
+		# accept inputs from sensors and stdin
+		ready = select.select(inputs, [], [])[0]
+
+		# loop though ready for reading
+		for sock in ready:
+			# check for new connections, if new connection
+			# select will include server (control) socket in ready
+			if sock == control.sock:
+				control.Accept()
+
+			# read from stdin for commands
+			elif sock == sys.stdin:
+				line = sys.stdin.readline()
+				line = line.split()
+
+				# user hit enter with no data
+				if line == []: 
+					PrintCommandMenu()
+					continue 
+
+				cmd = line.pop(0)
+
+				# command: QUIT
+				if cmd == 'QUIT':
+					# causes the server program to clean up any memory and any 
+					# sockets that are in use, and then terminate.
+					for active_sock in inputs: 
+						inputs.remove(active_sock)
+						active_sock.close()
+
+					sys.exit(0)
 			
-		inputs = [ sys.stdin ] + list(control.connections.keys())
+			# socket is a sensor connection
+			else:
+				msg = sock.recv(1024).decode('utf-8')
 
-		# accept inputs from control and stdin
-		while True:
-			ready = select.select(inputs, [], [])[0]
+				if msg:
+					# process sensor message
+					msg = msg.split()
+					cmd = msg.pop(0)
 
-			# loop though ready file descriptors
-			for sock in ready:
+					# UPDATEPOSITION [SensorID] [SensorRange] [CurrentXPosition] [CurrentYPosition]
+					if cmd == 'UPDATEPOSITION':
+						id, range, x, y = msg
 
-				# read form stdin for commands
-				if sock == sys.stdin:
-					line = sys.stdin.readline()
-					line = line.split()
+						# update control's store of sensor information
+						control.connections[sock].id    = id
+						control.connections[sock].x     = int(x)
+						control.connections[sock].y     = int(y)
+						control.connections[sock].range = int(range)
 
-					# user hit enter with no data
-					if line == []: 
-						PrintCommandMenu()
-						continue 
+						# find reachable (within range) base stations and sensors
+						reachable = control.Reachable(id)
+						reachable_str = ''
+						for node in reachable:
+							reachable_str += ' '.join(map(str,node)) + ' '
+						# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
+						resp = f'REACHABLE {len(reachable)} {reachable_str}'
+						sock.sendall(resp.encode('utf8'))
 
-					cmd = line.pop(0)
+					# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
+					if cmd == 'DATAMESSAGE':
+						# TODO: implement base station behavior
+						# ** see bottom of page 4 and top of 5 for actions **
+						orig_id		 = msg.pop(0)
+						next_id		 = msg.pop(0)
+						dest_id		 = msg.pop(0)
+						hop_list_len = int(msg.pop(0))
+						hop_list     = []
 
-					# command: QUIT
-					if cmd == 'QUIT':
-						# causes the server program to clean up any memory and any 
-						# sockets that are in use, and then terminate.
-						for active_sock in inputs: 
-							inputs.remove(active_sock)
-							active_sock.close()
+						for i in range(hop_list_len):
+							hop_list.append(msg[i])
 
-						sys.exit(0)
-				
-				# socket is a sensor connection
+						# [NextID] is a sensor’s ID 
+						# 		deliver the message to the destination
+						if next_id in [ sensor.id for sensor in control.connections.values() ]:
+							next_sock = control.GetSocket(id)
+							resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {hop_list}'
+							next_sock.sendall(resp.encode('utf8'))
+
+						# [NextID] is a base station
+						else:
+							pass
+						# 		base station id matches destination id
+						# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
+						# 		all reachable sensors and base stations are already in hop list
+						# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] could not be delivered')
+						# 		else send another DATAMESSAGE to next_id (base station), add base station id to hop list and get new next id
+						#			print(f'[BaseID]: Message from [OriginID] to [DestinationID] being forwarded through [BaseID]')
+						# 		if [OriginID] is the current base station, and the [NextID] and [DestinationID] match
+						# 			print(f'[BaseID]: Sent a new message directly to [DestinationID]')
+						#		else if the [OriginID] is the current base station
+						# 			print(f'[BaseID]: Sent a new message bound for [DestinationID]')
+
+					# WHERE [SensorID/BaseID] 
+					if cmd == 'WHERE':
+						id = int(msg.pop(0))
+						x, y = control.Where(id)
+
+						# send response: THERE [NodeID] [XPosition] [YPosition]
+						resp = f'THERE {id} {x} {y}'
+						sock.sendall(resp.encode('utf8'))
+
+				# client connection ended 
 				else:
-					msg = sock.recv(1024).decode('utf-8')
-					if msg:
-						# process sensor message
-						msg = msg.split()
-						cmd = msg.pop(0)
-
-						# UPDATEPOSITION [SensorID] [SensorRange] [CurrentXPosition] [CurrentYPosition]
-						if cmd == 'UPDATEPOSITION':
-							id, range, x, y = msg
-
-							# update control's store of sensor information
-							control.connections[client_sock].id    = id
-							control.connections[client_sock].x     = int(x)
-							control.connections[client_sock].y     = int(y)
-							control.connections[client_sock].range = int(range)
-
-							# find reachable (within range) base stations and sensors
-							reachable = control.Reachable(id)
-							reachable_str = ''
-							for node in reachable:
-								reachable_str += ' '.join(map(str,node)) + ' '
-							# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
-							resp = f'REACHABLE {len(reachable)} {reachable_str}'
-							sock.sendall(resp.encode('utf8'))
-
-						# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
-						if cmd == 'DATAMESSAGE':
-							# TODO: implement base station behavior
-							# ** see bottom of page 4 and top of 5 for actions **
-							orig_id		 = msg.pop(0)
-							next_id		 = msg.pop(0)
-							dest_id		 = msg.pop(0)
-							hop_list_len = int(msg.pop(0))
-							hop_list     = []
-							print(hop_list_len)
-							for i in range(hop_list_len):
-								hop_list.append(msg[i])
-
-							# [NextID] is a sensor’s ID 
-							# 		deliver the message to the destination
-							if next_id in [ sensor.id for sensor in control.connections.values() ]:
-								next_sock = control.GetSocket(id)
-								resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {hop_list}'
-								next_sock.sendall(resp.encode('utf8'))
-
-							# [NextID] is a base station
-							else:
-								pass
-							# 		base station id matches destination id
-							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] succesfully received')
-							# 		all reachable sensors and base stations are already in hop list
-							# 			print(f'[BaseID]: Message from [OriginID] to [DestinationID] could not be delivered')
-							# 		else send another DATAMESSAGE to next_id (base station), add base station id to hop list and get new next id
-							#			print(f'[BaseID]: Message from [OriginID] to [DestinationID] being forwarded through [BaseID]')
-							# 		if [OriginID] is the current base station, and the [NextID] and [DestinationID] match
-							# 			print(f'[BaseID]: Sent a new message directly to [DestinationID]')
-							#		else if the [OriginID] is the current base station
-							# 			print(f'[BaseID]: Sent a new message bound for [DestinationID]')
-
-						# WHERE [SensorID/BaseID] 
-						if cmd == 'WHERE':
-							id = int(msg.pop(0))
-							x, y = control.Where(id)
-
-							# send response: THERE [NodeID] [XPosition] [YPosition]
-							resp = f'THERE {id} {x} {y}'
-							sock.sendall(resp.encode('utf8'))
-
-					# client connection ended 
-					else:
-						del control.connections[sock]
-						inputs.remove(sock)
-						sock.close()
-						print('DEBUG: connection closed by sensor')
+					del control.connections[sock]
+					inputs.remove(sock)
+					sock.close()
+					print('DEBUG: connection closed by sensor')
 
 if __name__ == '__main__':
 	run()

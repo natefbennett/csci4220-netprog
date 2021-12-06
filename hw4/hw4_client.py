@@ -126,7 +126,7 @@ class Sensor:
 
 		# all reachable nodes are already in the hop list
 		if next_id == None:
-			print('{sensor.id}: Message from {orig_id} to {dest_id} could not be delivered')
+			print(f'{self.id}: Message from {orig_id} to {dest_id} could not be delivered.')
 			return
 		
 		# send: DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
@@ -136,9 +136,9 @@ class Sensor:
 		# started from this sensor
 		if orig_id == self.id:
 			if next_id == dest_id:
-				print(f'{self.id}: Sent a new message directly to {dest_id}')
+				print(f'{self.id}: Sent a new message directly to {dest_id}.')
 			else:
-				print(f'{self.id}: Sent a new message bound for {dest_id}')
+				print(f'{self.id}: Sent a new message bound for {dest_id}.')
 		else:
 			print(f'{self.id}: Message from {orig_id} to {dest_id} being forwarded through {self.id}')
 
@@ -245,7 +245,7 @@ def run():
 			elif cmd == 'QUIT':
 				# causes the client program to clean up any memory and any 
 				# sockets that are in use, and then terminate.
-				print('DEBUG: sensor closing connection to control')
+				# print('DEBUG: sensor closing connection to control')
 				sensor.c_sock.close()
 				break
 			
@@ -275,7 +275,7 @@ def run():
 
 					# message has reached destination
 					if sensor.id == dest_id:
-						print(f'{sensor.id}: Message from {orig_id} to {dest_id} succesfully received')
+						print(f'{sensor.id}: Message from {orig_id} to {dest_id} succesfully received.')
 					
 					# send another DATAMESSAGE to next node
 					else:
@@ -291,7 +291,7 @@ def run():
 			# server closed connection
 			else:
 				inputs.remove(sensor.c_sock)
-				print('DEBUG: control server closed connection')
+				# print('DEBUG: control server closed connection')
 
 if __name__ == '__main__':
 	run()

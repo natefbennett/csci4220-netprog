@@ -74,6 +74,7 @@ def TestParse(filename):
         peer_id = ''
         cur_test = None
         last_output = False
+        prev_line = ''
 
         for line in file:
             line = line.strip()
@@ -82,14 +83,17 @@ def TestParse(filename):
             if '=' in line:
                 test_id = int(line.strip('=').lstrip('TEST'))
                 cur_test = Test(test_id)
-
+                prev_line = line
+                
             # read "header"
             elif 'Invocation' in line:
                 input_type = 'invocation'
+                prev_line = line
                 continue
 
             elif 'Inputs' in line:
                 input_type = 'input'
+                prev_line = line
                 continue
 
             elif 'output' in line:
@@ -98,6 +102,7 @@ def TestParse(filename):
                     peer_id = line.split()[0].upper()
                 else:
                     peer_id = line.split()[0]
+                prev_line = line
                 continue
 
             # data line
@@ -143,9 +148,11 @@ def TestParse(filename):
                     
                     cur_test.peers[peer_id].output.append(line)
 
-                    if line.split() == [] and last_output:
+                    if line.split() == [] and last_output or 'output' in prev_line:
                         test_dict[cur_test.id] = cur_test
                         last_output = False
+
+                prev_line = line
 
     return test_dict
 

@@ -1,0 +1,3 @@
+client1: After reading REACHABLE message, I can see: 
+client1: After reading REACHABLE message, I can see: 
+client1: Message from client1 to base_station_h could not be delivered.
