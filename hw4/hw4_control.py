@@ -153,7 +153,7 @@ class Control:
 		tmp_list = []
 		for node_data in self.Reachable(id):
 			cur_id, cur_x, cur_y = node_data
-			dist = self.GetNode(dest_id).GetDistance(self.GetNode(dest_id)) # distance form destination node
+			dist = self.GetNode(cur_id).GetDistance(self.GetNode(dest_id)) # distance form destination node
 			tmp_list.append((dist, cur_id))
 
 		# sort temp list and pull ids only out
@@ -185,20 +185,7 @@ class Control:
 								n_next_id = id
 								break
 
-					# all reachable sensors and base stations are already in hop list
-					if n_next_id == None:
-						print(f'{base_station.id}: Message from {orig_id} to {dest_id} could not be delivered')
-						return
-					
-					# check if we are sending to a sensor or a base station
-					internal = True
-					# if sensor send to socket
-					if self.GetNode(n_next_id).type == 'sensor':
-						msg = f'DATAMESSAGE {orig_id} {n_next_id} {dest_id} {len(hop_list)} {hop_list}'
-						self.GetSocket(n_next_id).sendall(msg.encode('utf-8'))
-						internal = False
-
-					# started from this sensor
+					# started from this base station
 					if orig_id == base_station.id:
 						if n_next_id == dest_id:
 							print(f'{base_station.id}: Sent a new message directly to {dest_id}.')
@@ -206,6 +193,19 @@ class Control:
 							print(f'{base_station.id}: Sent a new message bound for {dest_id}.')
 					else:
 						print(f'{base_station.id}: Message from {orig_id} to {dest_id} being forwarded through {base_station.id}')
+
+					# all reachable sensors and base stations are already in hop list
+					if n_next_id == None:
+						print(f'{base_station.id}: Message from {orig_id} to {dest_id} could not be delivered.')
+						return
+					
+					# check if we are sending to a sensor or a base station
+					internal = True
+					# if sensor send to socket
+					if self.GetNode(n_next_id).type == 'sensor':
+						msg = f'DATAMESSAGE {orig_id} {n_next_id} {dest_id} {len(hop_list)} {" ".join(hop_list)}'
+						self.GetSocket(n_next_id).sendall(msg.encode('utf-8'))
+						internal = False
 
 					# if sending to base station, call function recursivly 
 					if internal:

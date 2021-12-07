@@ -274,7 +274,7 @@ def run():
 				PrintCommandMenu()
 		
 		# read from control socket for messages
-		if sensor.c_sock in ready:
+		elif sensor.c_sock in ready:
 			msg = sensor.c_sock.recv(1024).decode('utf-8')
 			# process sensor message
 			if msg:				

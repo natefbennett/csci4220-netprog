@@ -1,2 +1,0 @@
-clientC: After reading REACHABLE message, I can see: ['base_station_i']
-clientC: Message from clientB to clientC successfully received.
