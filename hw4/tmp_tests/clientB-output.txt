@@ -1,0 +1,3 @@
+clientB: After reading REACHABLE message, I can see: ['base_station_d', 'clientA']
+clientB: After reading REACHABLE message, I can see: ['base_station_d', 'clientA']
+clientB: Sent a new message bound for clientC.

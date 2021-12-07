@@ -282,8 +282,8 @@ def run():
 				cmd = msg.pop(0)
 
 				# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
-				if msg == 'DATAMESSAGE':
-					
+				if cmd == 'DATAMESSAGE':
+
 					orig_id		 = msg.pop(0)
 					next_id		 = msg.pop(0)
 					dest_id		 = msg.pop(0)

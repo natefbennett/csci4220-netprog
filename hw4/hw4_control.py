@@ -302,7 +302,7 @@ def run():
 
 						# send response: REACHABLE [NumReachable] [ReachableList]=[[[ID] [XPosition] [YPosition]], [...], ...]									  
 						resp = f'REACHABLE {len(reachable)} {reachable_str}'
-						sock.sendall(resp.encode('utf8'))
+						sock.sendall(resp.encode('utf-8'))
 
 					# DATAMESSAGE [OriginID] [NextID] [DestinationID] [HopListLength] [HopList]
 					elif cmd == 'DATAMESSAGE':
@@ -319,9 +319,9 @@ def run():
 						# [NextID] is a sensor’s ID 
 						# deliver the message to the destination
 						if next_id in [ sensor.id for sensor in control.connections.values() ]:
-							next_sock = control.GetSocket(id)
+							next_sock = control.GetSocket(next_id)
 							resp = f'DATAMESSAGE {orig_id} {next_id} {dest_id} {hop_list_len} {" ".join(hop_list)}'
-							next_sock.sendall(resp.encode('utf8'))
+							next_sock.sendall(resp.encode('utf-8'))
 
 						# [NextID] is a base station
 						else:
@@ -334,7 +334,7 @@ def run():
 
 						# send response: THERE [NodeID] [XPosition] [YPosition]
 						resp = f'THERE {id} {x} {y}'
-						sock.sendall(resp.encode('utf8'))
+						sock.sendall(resp.encode('utf-8'))
 
 				# client connection ended 
 				else:
